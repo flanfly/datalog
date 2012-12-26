@@ -185,13 +185,11 @@ std::ostream &operator<<(std::ostream &os, const rule &r)
 rg_node::rg_node(rule *r) : goal(false) { d.rule_node = r; }
 rg_node::rg_node(predicate *p) : goal(true) { d.goal_node = p; }
 
-database::database(std::initializer_list<rule> &lst) : rules(lst) {build_graph();} 
-database::database(const std::list<rule> &lst) : rules(lst) { build_graph(); }
-
-void database::build_graph(void)
+std::set<rg_node *> build_graph(std::list<rule> &rules)
 {	
 	std::map<std::string,rg_node *> pred_map;
 	std::map<rule *,rg_node *> rule_map;
+	std::set<rg_node *> ret;
 
 	// build node table, one for each rule and each predicate
 	for(rule &r: rules)
@@ -242,9 +240,8 @@ void database::build_graph(void)
 	
 	std::cout << "}" << std::endl;
 
-	std::transform(rule_map.begin(),rule_map.end(),std::inserter(rg_graph,rg_graph.begin()),[&](std::pair<rule *,rg_node *> p) { return p.second; });
-	std::transform(pred_map.begin(),pred_map.end(),std::inserter(rg_graph,rg_graph.begin()),[&](std::pair<std::string,rg_node *> p) { return p.second; });
-	std::copy(rg_graph.begin(),rg_graph.end(),std::inserter(extensional,extensional.begin()));
+	std::transform(rule_map.begin(),rule_map.end(),std::inserter(ret,ret.begin()),[&](std::pair<rule *,rg_node *> p) { return p.second; });
+	std::transform(pred_map.begin(),pred_map.end(),std::inserter(ret,ret.begin()),[&](std::pair<std::string,rg_node *> p) { return p.second; });
 
 	std::function<bool(const rg_node *,const rg_node *)> mutual_rec = [&](const rg_node *from, const rg_node *to) -> bool
 	{
@@ -269,27 +266,12 @@ void database::build_graph(void)
 			return false;
 	};
 
-	for(rg_node *a: rg_graph)
-		for(rg_node *b: rg_graph)
+	for(rg_node *a: ret)
+		for(rg_node *b: ret)
 			if(a->goal == b->goal && a != b && mutual_rec(a,b))
 				std::cout << (a->goal ? *a->d.goal_node : *a->d.rule_node) << " and " << (b->goal ? *b->d.goal_node : *b->d.rule_node) << " are mutual recrusive" << std::endl;
 	
-	for(rg_node *p: rg_graph)
-		for(rg_node *q: p->children)
-			extensional.erase(q);
-
-//	for(const rg_node *r: extensional)
-//	{
-		//assert(!r->goal);
-//		std::cout << *r->d.rule_node << " is extensional" << std::endl;
-//	}
-}
-	
-std::ostream &operator<<(std::ostream &os, const database &db)
-{
-	for(const rule &r: db.rules)
-		os << r << std::endl;
-	return os;
+	return ret;
 }
 
 bool union_compatible(const relation &a, const relation &b)
@@ -506,6 +488,7 @@ std::ostream &operator<<(std::ostream &os, const relation &a)
 // p `derives' q
 // p -> q
 // p occurs in the body of a rule whose head is q
+/*
 std::set<predicate *> derives(const predicate &q, const database &db)
 {
 	std::set<predicate *> ret;
@@ -516,7 +499,7 @@ std::set<predicate *> derives(const predicate &q, const database &db)
 				ret.insert(&p);
 	
 	return ret;
-}
+}*/
 
 relation step(const predicate &rule_a, const relation &rel_a, const predicate &rule_b, const relation &rel_b)
 {
@@ -616,12 +599,15 @@ relation step(const rule &r, std::map<std::string,relation> &rels)
 	return ret;
 }
 
-void eval(database &db, parse_i query)
+relation eval(parse_i query, std::list<rule> &intensional, std::map<std::string,relation> &extensional)
 {	
-	std::map<std::string,relation> rels;
+	std::map<std::string,relation> rels(extensional);
+	std::set<rg_node *> rg_graph = build_graph(intensional);
 
+	return relation();
+/*
 	// build relations for each predicate
-	for(const rg_node *n: db.rg_graph)
+	for(const rg_node *n: rg_graph)
 		if(n->goal && !rels.count(n->d.goal_node->name))
 		{
 			const predicate &p = *n->d.goal_node;
@@ -634,7 +620,7 @@ void eval(database &db, parse_i query)
 	
 	// fill extensional relations
 	std::cout << "extensional" << std::endl;
-	for(const rg_node *n: db.extensional)
+	for(const rg_node *n: extensional)
 	{
 		std::cout << (n->goal ? *n->d.goal_node : *n->d.rule_node) << std::endl;
 
@@ -663,7 +649,7 @@ void eval(database &db, parse_i query)
 
 	std::set<const rule *> worklist;
 
-	for(rg_node *n: db.extensional)
+	for(rg_node *n: extensional)
 	{
 		if(!n->goal && n->children.size())
 			n = *n->children.begin();
@@ -691,7 +677,7 @@ void eval(database &db, parse_i query)
 
 		if(modified)
 		{
-			for(rg_node *n: db.rg_graph)
+			for(rg_node *n: rg_graph)
 				if(n->goal && n->d.goal_node->name == r->head.name)
 					for(rg_node *m: n->children)
 					{
@@ -707,7 +693,7 @@ void eval(database &db, parse_i query)
 	for(const predicate *p: ders)
 		std::cout << *p << std::endl;
 
-	std::cout << rels[query.parent.rules.back().head.name] << std::endl;
+	std::cout << rels[query.parent.rules.back().head.name] << std::endl;*/
 }
 
 
@@ -746,10 +732,11 @@ int main(int argc, char *argv[])
 			 ancestor2(predicate("ancestor",{symbolic("X"),symbolic("Y")}),{predicate("ancestor",{symbolic("X"),symbolic("Y")}),predicate("parent",{symbolic("Y"),symbolic("Z")})});*/
 	
 	parse parent("parent",{"par","child"}),ancestor("ancestor",{"anc","desc"}),query("query",{"anc","desc"});
+	relation parent_rel = make_relation("par","child");
 
-	parent("john","jack");
-	parent("john","jim");
-	parent("jack","jil");
+	insert_row(parent_rel,std::string("john"),std::string("jack"));
+	insert_row(parent_rel,std::string("john"),std::string("jim"));
+	insert_row(parent_rel,std::string("jack"),std::string("jil"));
 
 	ancestor("X","Y") >> parent("X","Y");
 	ancestor("X","Z") >> parent("X","Y"),ancestor("Y","Z");
@@ -757,13 +744,14 @@ int main(int argc, char *argv[])
 	query("X","Y") >> ancestor("X","Y");
 
 	std::list<rule> all;
+	std::map<std::string,relation> db;
 
 	std::copy(parent.rules.begin(),parent.rules.end(),std::inserter(all,all.begin()));
 	std::copy(ancestor.rules.begin(),ancestor.rules.end(),std::inserter(all,all.end()));
 	std::copy(query.rules.begin(),query.rules.end(),std::inserter(all,all.end()));
-	database db(all);
+	db.insert(std::make_pair("parent",parent_rel));
 
-	eval(db,query("X","Y"));
+	eval(query("X","Y"),all,db);
 
 	/*parse p1("p1"),p2("p2"),p3("p3"),p4("p4"),p5("p5"),p6("p6"),p7("p7"),p8("p8"),p9("p9");
 

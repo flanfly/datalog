@@ -97,20 +97,6 @@ struct rg_node
 	std::set<rg_node *> children;
 };
 
-struct database
-{
-	database(std::initializer_list<rule> &lst);
-	database(const std::list<rule> &lst);
-
-	void build_graph(void);
-	
-	std::list<rule> rules;
-	std::set<rg_node *> extensional;
-	std::set<rg_node *> rg_graph;
-};
-
-std::ostream &operator<<(std::ostream &os, const database &db);
-
 template<typename... Args>
 relation make_relation(Args&&... args)
 {
@@ -141,6 +127,7 @@ void insert_column(relation &rel, std::string n, const T &t)
 	});
 }
 
+std::set<rg_node *> build_graph(std::list<rule> &rules);
 bool union_compatible(const relation &a, const relation &b);
 relation set_union(const relation &a, const relation &b);
 relation set_difference(const relation &a, const relation &b);
@@ -157,11 +144,11 @@ std::ostream &operator<<(std::ostream &os, const relation &a);
 // p `derives' q
 // p -> q
 // p occurs in the body of a rule whose head is q
-std::set<predicate *> derives(const predicate &q, const database &db);
+//std::set<predicate *> derives(const predicate &q, const database &db);
 
 relation step(const predicate &rule_a, const relation &rel_a, const predicate &rule_b, const relation &rel_b);
 relation step(const rule &r, std::map<std::string,relation> &rels);
 //void eval(database &db, class parse_i query);
-relation eval(class parse_i query,std::map<std::string,relation> &context);
+relation eval(class parse_i query, std::list<rule> &in, std::map<std::string,relation> &extensional);
 
 #endif
