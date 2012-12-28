@@ -1,7 +1,7 @@
 #include "dsl.hh"
 
-parse::parse(std::string n,std::initializer_list<std::string> il)
-: name(n), columns(il)
+parse::parse(std::string n)
+: name(n)
 {
 	return;
 }
@@ -54,7 +54,6 @@ parse_h operator>>(parse_i lhs, parse_i rhs)
 
 void add(parse_h &h, parse_i *opt)
 {
-	std::cout << "rule for " << h.parent.name << std::endl;
 	std::list<predicate> preds;
 
 	std::function<predicate(const parse_i&)> f = [](const parse_i &p)

@@ -28,7 +28,7 @@ public:
 
 struct parse
 {
-	parse(std::string n,std::initializer_list<std::string> il);
+	parse(std::string n);
 
 	template<typename... Tail>
 	parse_i operator()(Tail&&... tail)
@@ -36,14 +36,10 @@ struct parse
 		std::list<variable> vars;
 
 		fill(vars,tail...);
-		assert(vars.size() == columns.size());
-		
-		std::cout << "()" << std::endl;
 		return parse_i(*this,vars);
 	}
 
 	std::string name;
-	std::vector<std::string> columns;
 	std::list<rule> rules;
 };
 

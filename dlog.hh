@@ -10,40 +10,61 @@
 #include <iomanip>
 #include <sstream>
 #include <list>
+#include <unordered_set>
 #include <typeinfo>
 #include <typeindex>
 #include <boost/variant.hpp>
 #include <cstring>
 
+typedef boost::variant<bool,std::string> variant;
+
+namespace std 
+{
+	template<>
+	class hash<::variant>
+	{
+	public:
+    size_t operator()(const ::variant &v) const 
+    {
+			if(v.type() == typeid(bool))
+				return hash<bool>()(::boost::get<bool>(v));
+			else if(v.type() == typeid(string))
+				return hash<string>()(::boost::get<string>(v));
+			else
+				assert(false);
+    }
+	};	
+	
+	template<>
+	class hash<vector<::variant>>
+	{
+	public:
+    size_t operator()(const vector<::variant> &s) const 
+    {
+			return std::accumulate(s.cbegin(),s.cend(),0,[](size_t acc, const ::variant &v)
+				{ return acc ^ hash<::variant>()(v); });
+    }
+	};	
+}
+
 class relation
 {
 public:
-	typedef boost::variant<bool,std::string> variant;
 	typedef std::vector<variant> row;
 
-	relation(std::initializer_list<std::string> ns = std::initializer_list<std::string>());
-	relation(const std::vector<std::string> &ns);
-
-	void mutate(std::function<void(std::vector<std::string> &,std::vector<row> &)> f);
-	
-	const std::vector<std::string> &names(void) const;
-	const std::vector<std::type_index> &types(void) const;
-	const std::vector<row> &rows(void) const;
-
-	size_t column(std::string n) const;
+	void mutate(std::function<void(std::unordered_set<row> &)> f);
+	const std::unordered_set<row> &rows(void) const;
 
 private:
-	std::vector<std::string> m_names;
-	std::vector<std::type_index> m_types;
-	std::vector<row> m_rows;
+	std::unordered_set<row> m_rows;
 };
 
 struct variable
 {
-	variable(bool b, relation::variant v, std::string n);
+	variable(bool b, variant v, std::string n);
 
 	bool bound;
-	relation::variant instantiation;
+	variant instantiation;
 	std::string name;
 };
 
@@ -53,7 +74,7 @@ std::ostream &operator<<(std::ostream &os, const variable &v);
 template<typename T>
 variable bound(T t)
 {
-	return variable(true,relation::variant(t),"");
+	return variable(true,variant(t),"");
 }
 
 variable symbolic(std::string n);
@@ -65,10 +86,7 @@ struct predicate
 	predicate(std::string n, const std::vector<variable> &lst);
 
 	std::string name;
-	bool intensional;
-
-	std::vector<variable> variables;	// intensional == true
-	relation table;										// intensional == false
+	std::vector<variable> variables;
 };
 
 bool operator==(const predicate &a, const predicate &b);
@@ -98,45 +116,18 @@ struct rg_node
 };
 
 template<typename... Args>
-relation make_relation(Args&&... args)
-{
-	return relation({args...});
-}
-
-template<typename... Args>
 void insert_row(relation &rel, Args&&... args)
 {
-	assert(rel.names().size() == sizeof...(args));
+	assert(rel.rows().empty() || rel.rows().begin()->size() == sizeof...(args));
 	
-	std::vector<relation::variant> nr({relation::variant(args)...});
+	std::vector<variant> nr({variant(args)...});
 
-	rel.mutate([&](std::vector<std::string> &cols, std::vector<std::vector<relation::variant>> &rows)
-	{
-		rows.push_back(nr);
-	});
-}
-
-template<typename T>
-void insert_column(relation &rel, std::string n, const T &t)
-{
-	rel.mutate([&](std::vector<std::string> &cols, std::vector<std::vector<relation::variant>> &rows)
-	{
-		cols.push_back(n);
-		for(std::vector<relation::variant> &r: rows)
-			r.push_back(relation::variant(t));
-	});
+	rel.mutate([&](std::unordered_set<relation::row> &rows)
+		{ rows.insert(nr); });
 }
 
 std::set<rg_node *> build_graph(std::list<rule> &rules);
 bool union_compatible(const relation &a, const relation &b);
-relation set_union(const relation &a, const relation &b);
-relation set_difference(const relation &a, const relation &b);
-relation set_intersection(const relation &a, const relation &b);
-relation projection(const std::set<size_t> &cols, const relation &a);
-relation projection(std::initializer_list<size_t> cols, const relation &a);
-relation selection(std::function<bool(const std::vector<relation::variant>&)> p, const relation &a);
-relation rename(const relation &a, std::string from, std::string to);
-relation join(const relation &a, const relation &b, std::string attr);
 
 std::ostream &operator<<(std::ostream &os, const relation &a);
 
@@ -146,9 +137,8 @@ std::ostream &operator<<(std::ostream &os, const relation &a);
 // p occurs in the body of a rule whose head is q
 //std::set<predicate *> derives(const predicate &q, const database &db);
 
-relation step(const predicate &rule_a, const relation &rel_a, const predicate &rule_b, const relation &rel_b);
-relation step(const rule &r, std::map<std::string,relation> &rels);
-//void eval(database &db, class parse_i query);
+bool step(const predicate &lhs, const std::vector<const predicate*> &rhs, const std::vector<const relation::row*> &rows, std::unordered_set<relation::row> &out);
+relation single(const rule &r, std::map<std::string,relation> &rels);
 relation eval(class parse_i query, std::list<rule> &in, std::map<std::string,relation> &extensional);
 
 #endif
