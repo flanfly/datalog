@@ -473,27 +473,32 @@ relation eval(parse_i query, std::list<rule> &intensional, std::map<std::string,
 
 int main(int argc, char *argv[])
 {
-	parse parent("parent"),ancestor("ancestor"),query("query");
-	relation parent_rel;
+	parse parent("parent"),ancestor("ancestor"),age("age"),query("query");
+	relation parent_rel,age_rel;
 
 	insert_row(parent_rel,std::string("john"),std::string("jack"));
 	insert_row(parent_rel,std::string("john"),std::string("jim"));
 	insert_row(parent_rel,std::string("jack"),std::string("jil"));
 
+	insert_row(age_rel,std::string("john"),(unsigned int)1);
+	insert_row(age_rel,std::string("jack"),(unsigned int)2);
+	insert_row(age_rel,std::string("jil"),(unsigned int)3);
+	insert_row(age_rel,std::string("jim"),(unsigned int)4);
+
 	ancestor("X","Y") >> parent("X","Y");
 	ancestor("X","Z") >> parent("X","Y"),ancestor("Y","Z");
 
-	query("X","Y") >> ancestor("X","Y");
+	query("X","A","Y","B") >> ancestor("X","Y"),age("X","A"),age("Y","B");
 
 	std::list<rule> all;
 	std::map<std::string,relation> db;
 
-	std::copy(parent.rules.begin(),parent.rules.end(),std::inserter(all,all.begin()));
 	std::copy(ancestor.rules.begin(),ancestor.rules.end(),std::inserter(all,all.end()));
 	std::copy(query.rules.begin(),query.rules.end(),std::inserter(all,all.end()));
 	db.insert(std::make_pair("parent",parent_rel));
+	db.insert(std::make_pair("age",age_rel));
 
-	std::cout << eval(query("X","Y"),all,db) << std::endl;
+	std::cout << eval(query("X","A","Y","B"),all,db) << std::endl;
 
 	return 0;
 }

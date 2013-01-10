@@ -7,4 +7,4 @@ all: dlog
 	$(CXX) $(CXXARGS) -c -o $@ $<
 
 dlog: dlog.o dsl.o
-	$(CXX) -o  $@ $?
+	$(CXX) -o  $@ $^

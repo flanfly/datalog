@@ -16,7 +16,7 @@
 #include <boost/variant.hpp>
 #include <cstring>
 
-typedef boost::variant<bool,std::string> variant;
+typedef boost::variant<bool,unsigned int,std::string> variant;
 
 namespace std 
 {
@@ -28,6 +28,8 @@ namespace std
     {
 			if(v.type() == typeid(bool))
 				return hash<bool>()(::boost::get<bool>(v));
+			else if(v.type() == typeid(unsigned int))
+				return hash<unsigned int>()(::boost::get<unsigned int>(v));
 			else if(v.type() == typeid(string))
 				return hash<string>()(::boost::get<string>(v));
 			else

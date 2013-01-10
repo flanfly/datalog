@@ -6,10 +6,11 @@ parse::parse(std::string n)
 	return;
 }
 
-parse_h::parse_h(parse_i &p, parse_i &o)
-: parent(p.parent), variables(p.variables), first(o)
+parse_h::parse_h(parse_i &head, parse_i &tail)
+: parent(head.parent), variables(head.variables)
 {
-	return;
+	parent.rules.push_back(rule(predicate(head.parent.name,head.variables),{predicate(tail.parent.name,tail.variables)}));
+	index = parent.rules.size() - 1;
 }
 
 parse_i::parse_i(parse &p, std::vector<variable> &v)
@@ -29,47 +30,15 @@ void fill(std::list<variable> &p)
 	return;
 }
 
-parse_i operator,(parse_i lhs, parse_i rhs)
-{
-	parse_i ret(lhs);
-
-	ret.tail.push_back(parse_i(rhs.parent,rhs.variables));
-	copy(rhs.tail.begin(),rhs.tail.end(),std::inserter(ret.tail,ret.tail.end()));
-	return ret;
-}
-
 parse_h operator,(parse_h h, parse_i i)
 {
-	h.parent.rules.pop_back();
-	add(h,&i);
+	//std::cout << "operator,(h,i)" << std::endl;
+	h.parent.rules[h.index].body.push_back(predicate(i.parent.name,i.variables));
 	return h;
 }
 
 parse_h operator>>(parse_i lhs, parse_i rhs)
 {
-	parse_h h(lhs,rhs);
-	add(h,0);
-	return h;
+	//std::cout << "operator>>(i,i)" << std::endl;
+	return parse_h(lhs,rhs);
 }
-
-void add(parse_h &h, parse_i *opt)
-{
-	std::list<predicate> preds;
-
-	std::function<predicate(const parse_i&)> f = [](const parse_i &p)
-		{ return predicate(p.parent.name,p.variables); };
-
-	preds.push_back(f(h.first));
-	for(const parse_i &p: h.first.tail)
-		preds.push_back(f(p));
-
-	if(opt)
-	{
-		preds.push_back(f(*opt));
-		for(const parse_i &p: opt->tail)
-			preds.push_back(f(p));
-	}
-
-	h.parent.rules.push_back(rule(predicate(h.parent.name,h.variables),preds));
-}
-

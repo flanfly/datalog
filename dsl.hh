@@ -40,7 +40,7 @@ struct parse
 	}
 
 	std::string name;
-	std::list<rule> rules;
+	std::vector<rule> rules;
 };
 
 class parse_h
@@ -51,7 +51,7 @@ private:
 public:
 	parse &parent;
 	std::vector<variable> variables;
-	parse_i first;
+	unsigned int index;
 	
 	friend parse_h operator,(parse_h h, parse_i i);
 	friend parse_h operator>>(parse_i lhs, parse_i rhs);
@@ -102,9 +102,7 @@ void fill(std::list<variable> &p, const char *head, Tail&&... tail)
 	fill(p,tail...);
 }
 
-parse_i operator,(parse_i lhs, parse_i rhs);
 parse_h operator,(parse_h h, parse_i i);
 parse_h operator>>(parse_i lhs, parse_i rhs);
-void add(parse_h &h, parse_i *opt);
 
 #endif
