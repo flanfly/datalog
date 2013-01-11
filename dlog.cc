@@ -3,36 +3,133 @@
 #include "dlog.hh"
 #include "dsl.hh"
 
-void relation::mutate(std::function<void(std::unordered_set<row> &)> f)
+const std::vector<relation::row> &relation::rows(void) const
 {
-	f(m_rows);
-	
-	if(m_rows.size())
-	{
-		std::vector<std::type_index> ts;
-		
-		for(const variant &v: *m_rows.begin())
-			ts.push_back(v.type());
-
-		// typecheck. can be removed in release
-		assert(all_of(m_rows.cbegin(),m_rows.cend(),[&](const std::vector<variant> &r) -> bool
-		{
-			size_t col = 0;
-			bool ret = true;
-		
-			while(col < r.size())
-			{
-				ret &= ts[col] == r[col].type();
-				++col;
-			}
-			return ret;
-		}));
-	}
+	return m_rows;
 }
 
-const std::unordered_set<relation::row> &relation::rows(void) const
-{ 
-	return m_rows;
+std::set<unsigned int> *relation::find(const std::vector<variable> &b) const
+{
+	if(m_rows.empty()) return 0;
+	assert(b.size() == m_rows[0].size());
+
+	if(m_indices.empty()) index();
+	assert(b.size() == m_indices.size());
+	
+	unsigned int col = 0;
+	std::set<unsigned int> *ret = 0;
+	set::multimap<std::string,unsigned int> unbound;
+
+	while(col < b.size())
+	{
+		const variable &var = b[col];
+		const std::unordered_multimap<variant,unsigned int> &idx = m_indices[col];
+
+		if(var.bound)
+		{
+			auto n = idx.equal_range(var.instantiation);
+
+			if(!ret)
+			{
+				ret = new std::set<unsigned int>();
+				while(n.first != n.second)
+					ret->insert((n.first++)->second);
+			}
+			else
+			{
+				std::set<unsigned int> eqr;
+				std::set<unsigned int> *nret = new std::set<unsigned int>();
+
+				while(n.first != n.second)
+					eqr.insert((n.first++)->second);
+
+				std::set_intersection(eqr.begin(),eqr.end(),ret->begin(),ret->end(),std::inserter(*nret,nret->begin()));
+				delete ret;
+				ret = nret;
+			}
+		}
+		else
+		{
+			unbound.insert(std::make_pair(var.name,col));
+		}
+
+		++col;
+	}
+
+	if(unbound.size() > b
+
+	return ret;
+}
+
+void relation::insert(const relation::row &r)
+{
+	assert(m_rows.empty() || r.size() == m_rows[0].size());
+	std::vector<variable> b;
+	std::set<unsigned int> *coll;
+
+	for(const variant &v: r)
+		b.push_back(variable(true,v,""));
+	
+	coll = find(b);
+
+	if(!coll || coll->empty())
+	{
+		m_rows.push_back(r);
+		unsigned int j = 0;
+
+		while(j < r.size())
+		{
+			while(m_indices.size() <= j)
+				m_indices.push_back(std::unordered_multimap<variant,unsigned int>());
+			m_indices[j].insert(std::make_pair(r[j],m_rows.size() - 1));
+
+			++j;
+		}
+	}
+	else if(coll)
+		delete coll;
+
+}
+
+void relation::reject(std::function<bool(const relation::row &)> f)
+{
+	auto i = m_rows.begin();
+	std::vector<row> n;
+	
+	n.reserve(m_rows.size());
+	while(i != m_rows.end())
+	{
+		if(f(*i))
+			m_indices.clear();
+		else
+			n.push_back(*i);
+		++i;
+	}
+
+	m_rows = n;
+}
+
+void relation::index(void) const
+{
+	m_indices.clear();
+
+	auto i = m_rows.cbegin();
+	while(i != m_rows.cend())
+	{
+		const row &r = *i;
+		unsigned int j = 0;
+
+		while(j < r.size())
+		{
+			while(m_indices.size() <= j)
+				m_indices.push_back(std::unordered_multimap<variant,unsigned int>());
+			m_indices[j].insert(std::make_pair(r[j],std::distance(m_rows.begin(),i)));
+
+			++j;
+		}
+
+		++i;
+	}
 }
 
 variable::variable(bool b, variant v, std::string n)
@@ -220,15 +317,21 @@ std::set<rg_node *> build_graph(std::list<rule> &rules)
 	return ret;
 }
 
-std::ostream &operator<<(std::ostream &os, const relation &a)
+std::ostream &operator<<(std::ostream &os, const rel_ptr &a)
 {
-	if(a.rows().empty())
+	if(!a)
+	{
+		os << "NULL" << std::endl;
+		return os;
+	}
+		
+	if(a->rows().empty())
 	{
 		os << "empty" << std::endl;
 		return os;
 	}
 
-	const size_t cols = a.rows().begin()->size();
+	const size_t cols = a->rows().begin()->size();
 	size_t *widths = new size_t[cols];
 	std::list<std::list<std::string>> text;
 	size_t col = 0;
@@ -239,8 +342,8 @@ std::ostream &operator<<(std::ostream &os, const relation &a)
 	 	++col;
 	}
 
-	auto row = a.rows().begin();
-	while(row != a.rows().end())
+	auto row = a->rows().begin();
+	while(row != a->rows().end())
 	{
 		col = 0;
 		
@@ -304,8 +407,8 @@ std::set<predicate *> derives(const predicate &q, const database &db)
 	
 	return ret;
 }*/
-
-bool step(const predicate &lhs, const std::vector<const predicate*> &rhs, const std::vector<const relation::row*> &rows, std::unordered_set<relation::row> &out)
+/*
+bool join(const predicate &lhs, const std::vector<const predicate*> &rhs, const std::vector<const relation::row*> &rows, std::unordered_set<relation::row> &out)
 {
 	assert(rows.size() == rhs.size());
 
@@ -366,11 +469,41 @@ bool step(const predicate &lhs, const std::vector<const predicate*> &rhs, const 
 	out.insert(o);
 
 	return true;
-}
+}*/
+/*
+rel_ptr select(const predicate &head, const predicate &rhs,rel_ptr rel)
+{
+	assert(rel);
+	rel_ptr ret(new relation());
 
-relation single(const rule &r, std::map<std::string,relation> &rels)
+	ret.mutate([&](std::unordered_set<relation::row> &rows)
+	{
+		for(const relation::row &row: rel->rows())
+		{
+			
+			for(const variable &var: rhs.variables)
+		
+
+rel_ptr single(const rule &r, std::map<std::string,rel_ptr> &rels)
 {	
-	relation ret(rels[r.head.name]);
+	assert(r.body.size());
+
+	if(r.body.size() == 1)
+		return select(r.head,*r.body.begin(),rels[r.body.begin()->name]);
+	else
+	{
+		auto i = r.body.begin();
+		rel_ptr temp_rel(new relation());
+		predicate temp_pred;
+
+		while(std::next(i) != r.body.end())
+		{
+			join(*i,*std::next(i),temp_pred,temp_rel);
+			++i;
+		}
+
+		return select(r.head,temp_pred,temp_rel);
+	}
 	
 	ret.mutate([&](std::unordered_set<relation::row> &ret_rows) -> void
 	{
@@ -379,7 +512,7 @@ relation single(const rule &r, std::map<std::string,relation> &rels)
 		std::function<void(std::list<predicate>::const_iterator)> f = [&](std::list<predicate>::const_iterator i)
 		{
 			assert(rels.count(i->name));
-			const relation &rel = rels[i->name];
+			const rel_ptr &rel = rels[i->name];
 
 			rhs.push_back(&*i);
 			++i;
@@ -405,9 +538,9 @@ relation single(const rule &r, std::map<std::string,relation> &rels)
 	return ret;
 }
 
-relation eval(parse_i query, std::list<rule> &intensional, std::map<std::string,relation> &extensional)
+rel_ptr eval(parse_i query, std::list<rule> &intensional, std::map<std::string,rel_ptr> &extensional)
 {	
-	std::map<std::string,relation> rels(extensional);
+	std::map<std::string,rel_ptr> rels(extensional);
 	std::set<rg_node *> rg_graph = build_graph(intensional);
 
 	// build relations for each predicate
@@ -416,10 +549,10 @@ relation eval(parse_i query, std::list<rule> &intensional, std::map<std::string,
 		{
 			const predicate &p = *n->d.goal_node;
 
-			rels.insert(std::make_pair(p.name,relation()));
+			rels.insert(std::make_pair(p.name,rel_ptr(new relation())));
 		}
 	
-	for(const std::pair<std::string,relation> &p: rels)
+	for(const std::pair<std::string,rel_ptr> &p: rels)
 		std::cout << p.first << ":" << std::endl << p.second << std::endl;
 
 	std::set<rg_node *> roots(rg_graph);
@@ -444,14 +577,14 @@ relation eval(parse_i query, std::list<rule> &intensional, std::map<std::string,
 		bool modified = false;
 		auto i = worklist.begin();
 		const rule *r = *i;
-		relation rel;
+		rel_ptr rel;
 		
 		worklist.erase(i);
 
 		std::cout << "do " << *r << std::endl;
 		rel = single(*r,rels);
 
-		modified = rel.rows() != rels[r->head.name].rows();
+		modified = rel->rows() != rels[r->head.name].rows();
 
 		if(modified)
 		{
@@ -468,13 +601,13 @@ relation eval(parse_i query, std::list<rule> &intensional, std::map<std::string,
 	
 	assert(rels.count(query.parent.name));
 	return rels[query.parent.name];
-}
+}*/
 
 
 int main(int argc, char *argv[])
-{
+{/*
 	parse parent("parent"),ancestor("ancestor"),age("age"),query("query");
-	relation parent_rel,age_rel;
+	rel_ptr parent_rel(new relation()),age_rel(new relation());
 
 	insert_row(parent_rel,std::string("john"),std::string("jack"));
 	insert_row(parent_rel,std::string("john"),std::string("jim"));
@@ -491,14 +624,28 @@ int main(int argc, char *argv[])
 	query("X","A","Y","B") >> ancestor("X","Y"),age("X","A"),age("Y","B");
 
 	std::list<rule> all;
-	std::map<std::string,relation> db;
+	std::map<std::string,rel_ptr> db;
 
 	std::copy(ancestor.rules.begin(),ancestor.rules.end(),std::inserter(all,all.end()));
 	std::copy(query.rules.begin(),query.rules.end(),std::inserter(all,all.end()));
 	db.insert(std::make_pair("parent",parent_rel));
 	db.insert(std::make_pair("age",age_rel));
 
-	std::cout << eval(query("X","A","Y","B"),all,db) << std::endl;
+	std::cout << eval(query("X","A","Y","B"),all,db) << std::endl;*/
+
+	rel_ptr a(new relation());
+	std::vector<variable> b1({variable(false,"","X"),variable(true,1,"")});
+
+	insert(a,std::string("A"),1);
+	insert(a,std::string("A"),2);
+	insert(a,std::string("A"),3);
+	insert(a,std::string("B"),1);
+	insert(a,std::string("B"),2);
+	insert(a,std::string("C"),1);
+	insert(a,std::string("C"),1);
+
+	std::cout << a << std::endl;
+	std::cout << find(a,variable(true,"A",""),variable(true,1,"")) << std::endl;
 
 	return 0;
 }
