@@ -18,7 +18,9 @@ std::set<unsigned int> *relation::find(const std::vector<variable> &b) const
 	
 	unsigned int col = 0;
 	std::set<unsigned int> *ret = 0;
-	set::multimap<std::string,unsigned int> unbound;
+	std::multimap<std::string,unsigned int> unbound;
+	bool all = true;
+	bool last_pass = false;
 
 	while(col < b.size())
 	{
@@ -47,17 +49,56 @@ std::set<unsigned int> *relation::find(const std::vector<variable> &b) const
 				delete ret;
 				ret = nret;
 			}
+
+			all = false;
 		}
 		else
 		{
+			last_pass |= unbound.count(var.name) > 0;
 			unbound.insert(std::make_pair(var.name,col));
 		}
 
 		++col;
 	}
 
-	if(unbound.size() > b
+	if(all)
+	{
+		unsigned int i = 0;
 
+		ret = new std::set<unsigned int>();
+		while(i < m_rows.size())
+			ret->insert(i++);
+	}
+
+	assert(ret);
+
+	if(last_pass && unbound.size() > 1)
+	{
+		auto i = ret->begin();
+		while(i != ret->end())
+		{
+			const row &r = m_rows[*i];
+			auto j = unbound.begin();
+
+			while(std::next(j) != unbound.end())
+			{
+				auto n = std::next(j);
+
+				if(n->first == j->first)
+				{
+					if(!(r[n->second] == r[j->second]))
+					{
+						i = ret->erase(i);
+						break;
+					}
+				}
+				++j;
+			}
+
+			++i;
+		}
+	}
+						
 	return ret;
 }
 
@@ -391,6 +432,16 @@ std::ostream &operator<<(std::ostream &os, const rel_ptr &a)
 	return os;
 }
 
+variable find_helper(const ub &)
+{
+	return variable(false,"","X");
+}
+
+variable find_helper(variant v)
+{
+	return variable(true,v,"");
+}
+
 // p,q predicates
 // p `derives' q
 // p -> q
@@ -407,12 +458,66 @@ std::set<predicate *> derives(const predicate &q, const database &db)
 	
 	return ret;
 }*/
+
+rel_ptr join(const std::vector<variable> &a_bind,const rel_ptr a_rel,const std::vector<variable> &b_bind,const rel_ptr b_rel)
+{
+	assert(a_rel && b_rel);
+	std::set<unsigned int> *a_idx = a_rel->find(a_bind);
+	assert(a_idx);
+	std::multimap<unsigned int,unsigned int> cross_vars; // a -> b
+	rel_ptr ret(new relation());
+
+	auto i = a_bind.begin();
+	while(i != a_bind.end())
+	{
+		if(!i->bound)
+		{
+			auto j = b_bind.begin();
+			while(j != b_bind.end())
+			{
+				if(!j->bound && i->name ==j->name)
+			 		cross_vars.insert(std::make_pair(std::distance(a_bind.begin(),i),std::distance(b_bind.begin(),j)));
+				++j;
+			}
+		}
+		++i;
+	}
+
+	for(unsigned int a_ri: *a_idx)
+	{	
+		const relation::row &r = a_rel->rows()[a_ri];
+		std::vector<variable> binding(b_bind);
+
+		for(const std::pair<unsigned int,unsigned int> &xv: cross_vars)
+		{
+			binding[xv.second].instantiation = variant(r[xv.first]);
+			binding[xv.second].bound = true;
+		}
+
+		std::set<unsigned int> *b_idx = b_rel->find(binding);
+		if(b_idx)
+		{
+			for(unsigned int b_ri: *b_idx)
+			{
+				relation::row nr(r);
+				const relation::row &s = b_rel->rows()[b_ri];
+
+				std::copy(s.begin(),s.end(),std::inserter(nr,nr.end()));
+				ret->insert(nr);
+			}
+			delete b_idx;
+		}
+	}
+
+	delete a_idx;
+	return ret;
+}
 /*
 bool join(const predicate &lhs, const std::vector<const predicate*> &rhs, const std::vector<const relation::row*> &rows, std::unordered_set<relation::row> &out)
 {
 	assert(rows.size() == rhs.size());
 
-	std::map<std::string,variant> bindings;
+	std::map<std::string,unsigned int> bindings;
 	size_t pred = 0;
 
 	while(pred < rhs.size())
@@ -634,8 +739,7 @@ int main(int argc, char *argv[])
 	std::cout << eval(query("X","A","Y","B"),all,db) << std::endl;*/
 
 	rel_ptr a(new relation());
-	std::vector<variable> b1({variable(false,"","X"),variable(true,1,"")});
-
+	std::vector<variable> ab({variable(false,"","A"),variable(false,"","B")});
 	insert(a,std::string("A"),1);
 	insert(a,std::string("A"),2);
 	insert(a,std::string("A"),3);
@@ -645,7 +749,16 @@ int main(int argc, char *argv[])
 	insert(a,std::string("C"),1);
 
 	std::cout << a << std::endl;
-	std::cout << find(a,variable(true,"A",""),variable(true,1,"")) << std::endl;
+	std::cout << find(a,ubound,1) << std::endl;
 
-	return 0;
+	rel_ptr b(new relation());
+	std::vector<variable> bb({variable(false,"","A"),variable(true,"B","")});
+	insert(b,"A","A");
+	insert(b,"A","B");
+	insert(b,"B","B");
+
+	std::cout << b << std::endl;
+	std::cout << find(b,ubound,ubound) << std::endl;
+
+	std::cout << join(ab,a,bb,b) << std::endl;
 }

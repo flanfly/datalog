@@ -24,6 +24,9 @@ struct predicate;
 struct rg_node;
 struct rule;
 
+struct ub {};
+static ub ubound;
+
 typedef boost::variant<unsigned int,std::string> variant;
 
 namespace std 
@@ -149,7 +152,7 @@ rel_ptr find(rel_ptr rel, Args&&... args)
 {
 	assert(rel->rows().empty() || rel->rows().begin()->size() == sizeof...(args));
 	
-	std::vector<variable> nr({variable(args)...});
+	std::vector<variable> nr({find_helper(args)...});
 	std::set<unsigned int> *idx = rel->find(nr);
 	rel_ptr ret(new relation());
 
