@@ -102,7 +102,7 @@ std::set<unsigned int> *relation::find(const std::vector<variable> &b) const
 	return ret;
 }
 
-void relation::insert(const relation::row &r)
+bool relation::insert(const relation::row &r)
 {
 	assert(m_rows.empty() || r.size() == m_rows[0].size());
 	std::vector<variable> b;
@@ -126,10 +126,14 @@ void relation::insert(const relation::row &r)
 
 			++j;
 		}
+		return true;
 	}
 	else if(coll)
+	{
 		delete coll;
-
+	}
+	
+	return false;
 }
 
 void relation::reject(std::function<bool(const relation::row &)> f)
@@ -512,6 +516,88 @@ rel_ptr join(const std::vector<variable> &a_bind,const rel_ptr a_rel,const std::
 	delete a_idx;
 	return ret;
 }
+
+rel_ptr eval_rule(const rule &r, const std::map<std::string,rel_ptr> &relations)
+{
+	rel_ptr temp(new relation());
+	std::vector<variable> binding;
+
+	if(r.body.empty())
+		return temp;
+
+
+	if(r.body.size() > 1)
+	{
+		auto i = r.body.begin();
+
+		while(i != r.body.end())
+		{
+			if(i == r.body.begin())
+			{
+				temp = join(i->variables,relations.at(i->name),std::next(i)->variables,relations.at(std::next(i)->name));
+				binding = i->variables;
+
+				++i;
+			}
+			else
+			{
+				temp = join(binding,temp,i->variables,relations.at(i->name));
+			}
+
+			std::copy(i->variables.begin(),i->variables.end(),std::inserter(binding,binding.end()));
+			++i;
+		}
+	}
+	else
+	{
+		const rel_ptr rel = relations.at(r.body.front().name);
+		std::set<unsigned int> *s = rel->find(r.body.front().variables);
+
+		if(s)
+		{
+			for(unsigned int i: *s)
+				temp->insert(rel->rows()[i]);
+			binding = r.body.front().variables;
+			delete s;
+		}
+	}
+
+	// project onto head predicate
+	std::map<std::string,unsigned int> common; // varname -> temp rel column
+
+	for(const variable &v: r.head.variables)
+	{
+		if(!v.bound)
+		{
+			auto i = binding.begin();
+			while(i != binding.end())
+			{
+				const variable &w = *i;
+				if(!w.bound && v.name == w.name)
+					common.insert(std::make_pair(v.name,std::distance(binding.begin(),i)));
+
+				++i;
+			}
+		}
+	}
+
+	rel_ptr ret(new relation());
+	for(const relation::row &rr: temp->rows())
+	{
+		relation::row nr;
+
+		for(const variable &v: r.head.variables)
+			if(v.bound)
+				nr.push_back(v.instantiation);
+			else
+				nr.push_back(rr[common[v.name]]);
+		ret->insert(nr);
+	}
+
+	return ret;
+}
+
+	
 /*
 bool join(const predicate &lhs, const std::vector<const predicate*> &rhs, const std::vector<const relation::row*> &rows, std::unordered_set<relation::row> &out)
 {
@@ -641,7 +727,7 @@ rel_ptr single(const rule &r, std::map<std::string,rel_ptr> &rels)
 	});
 
 	return ret;
-}
+}*/
 
 rel_ptr eval(parse_i query, std::list<rule> &intensional, std::map<std::string,rel_ptr> &extensional)
 {	
@@ -687,9 +773,13 @@ rel_ptr eval(parse_i query, std::list<rule> &intensional, std::map<std::string,r
 		worklist.erase(i);
 
 		std::cout << "do " << *r << std::endl;
-		rel = single(*r,rels);
+		rel = eval_rule(*r,rels);
+		std::cout << "result:" << std::endl << rel << std::endl;
 
-		modified = rel->rows() != rels[r->head.name].rows();
+		// TODO: make more efficient
+		rel_ptr old = rels[r->head.name];
+		for(const relation::row &r: rel->rows())
+			modified |= old->insert(r);
 
 		if(modified)
 		{
@@ -700,13 +790,12 @@ rel_ptr eval(parse_i query, std::list<rule> &intensional, std::map<std::string,r
 						assert(!m->goal);
 						worklist.insert(m->d.rule_node);
 					}
-			rels[r->head.name] = rel;
 		}	
 	}
 	
 	assert(rels.count(query.parent.name));
 	return rels[query.parent.name];
-}*/
+}
 
 
 int main(int argc, char *argv[])
@@ -738,27 +827,24 @@ int main(int argc, char *argv[])
 
 	std::cout << eval(query("X","A","Y","B"),all,db) << std::endl;*/
 
-	rel_ptr a(new relation());
-	std::vector<variable> ab({variable(false,"","A"),variable(false,"","B")});
-	insert(a,std::string("A"),1);
-	insert(a,std::string("A"),2);
-	insert(a,std::string("A"),3);
-	insert(a,std::string("B"),1);
-	insert(a,std::string("B"),2);
-	insert(a,std::string("C"),1);
-	insert(a,std::string("C"),1);
+	rel_ptr parent_rel(new relation());
+	//std::vector<variable> ab({variable(false,"","A"),variable(false,"","B")});
+	insert(parent_rel,"john","jack");
+	insert(parent_rel,"john","jim");
+	insert(parent_rel,"jack","jil");
+	
+	parse parent("parent"),ancestor("ancestor"),age("age"),query("query");
+	ancestor("X","Y") >> parent("X","Y");
+	ancestor("X","Z") >> parent("X","Y"),ancestor("Y","Z");
 
-	std::cout << a << std::endl;
-	std::cout << find(a,ubound,1) << std::endl;
+	query("X","Y") >> ancestor("X","Y");
 
-	rel_ptr b(new relation());
-	std::vector<variable> bb({variable(false,"","A"),variable(true,"B","")});
-	insert(b,"A","A");
-	insert(b,"A","B");
-	insert(b,"B","B");
+	std::list<rule> all;
+	std::map<std::string,rel_ptr> db;
 
-	std::cout << b << std::endl;
-	std::cout << find(b,ubound,ubound) << std::endl;
+	std::copy(ancestor.rules.begin(),ancestor.rules.end(),std::inserter(all,all.end()));
+	std::copy(query.rules.begin(),query.rules.end(),std::inserter(all,all.end()));
+	db.insert(std::make_pair("parent",parent_rel));
 
-	std::cout << join(ab,a,bb,b) << std::endl;
+	std::cout << eval(query("X","Y"),all,db) << std::endl;
 }

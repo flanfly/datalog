@@ -68,7 +68,7 @@ public:
 	const std::vector<row> &rows(void) const;
 	std::set<unsigned int> *find(const std::vector<variable> &b) const;
 
-	void insert(const row &r);
+	bool insert(const row &r);
 	void reject(std::function<bool(const row &)> f);
 
 private:
