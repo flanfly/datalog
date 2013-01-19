@@ -67,6 +67,7 @@ public:
 	
 	const std::vector<row> &rows(void) const;
 	std::set<unsigned int> *find(const std::vector<variable> &b) const;
+	bool includes(const relation::row &r) const;
 
 	bool insert(const row &r);
 	void reject(std::function<bool(const row &)> f);
@@ -168,18 +169,7 @@ rel_ptr find(rel_ptr rel, Args&&... args)
 }
 
 std::set<rg_node *> build_graph(std::list<rule> &rules);
-bool union_compatible(const rel_ptr &a, const rel_ptr &b);
-
 std::ostream &operator<<(std::ostream &os, const rel_ptr &a);
-
-// p,q predicates
-// p `derives' q
-// p -> q
-// p occurs in the body of a rule whose head is q
-//std::set<predicate *> derives(const predicate &q, const database &db);
-
-bool step(const predicate &lhs, const std::vector<const predicate*> &rhs, const std::vector<const relation::row*> &rows, std::unordered_set<relation::row> &out);
-rel_ptr single(const rule &r, std::map<std::string,rel_ptr> &rels);
 rel_ptr eval(class parse_i query, std::list<rule> &in, std::map<std::string,rel_ptr> &extensional);
 
 #endif

@@ -101,19 +101,34 @@ std::set<unsigned int> *relation::find(const std::vector<variable> &b) const
 						
 	return ret;
 }
-
-bool relation::insert(const relation::row &r)
+bool relation::includes(const relation::row &r) const
 {
-	assert(m_rows.empty() || r.size() == m_rows[0].size());
 	std::vector<variable> b;
 	std::set<unsigned int> *coll;
+	bool ret = false;
+	
+	if(m_rows.empty() || r.size() != m_rows[0].size())
+		return ret;
 
 	for(const variant &v: r)
 		b.push_back(variable(true,v,""));
 	
 	coll = find(b);
 
-	if(!coll || coll->empty())
+	if(coll)
+	{
+		ret = !coll->empty();
+		delete coll;
+	}
+
+	return ret;
+}
+
+bool relation::insert(const relation::row &r)
+{
+	assert(m_rows.empty() || r.size() == m_rows[0].size());
+
+	if(!includes(r))
 	{
 		m_rows.push_back(r);
 		unsigned int j = 0;
@@ -128,12 +143,8 @@ bool relation::insert(const relation::row &r)
 		}
 		return true;
 	}
-	else if(coll)
-	{
-		delete coll;
-	}
-	
-	return false;
+	else
+		return false;
 }
 
 void relation::reject(std::function<bool(const relation::row &)> f)
@@ -446,23 +457,6 @@ variable find_helper(variant v)
 	return variable(true,v,"");
 }
 
-// p,q predicates
-// p `derives' q
-// p -> q
-// p occurs in the body of a rule whose head is q
-/*
-std::set<predicate *> derives(const predicate &q, const database &db)
-{
-	std::set<predicate *> ret;
-
-	for(rg_node *n: db.rg_graph)
-		if(!n->goal && n->d.rule_node->head.name == q.name)
-			for(predicate &p: n->d.rule_node->body)
-				ret.insert(&p);
-	
-	return ret;
-}*/
-
 rel_ptr join(const std::vector<variable> &a_bind,const rel_ptr a_rel,const std::vector<variable> &b_bind,const rel_ptr b_rel)
 {
 	assert(a_rel && b_rel);
@@ -597,152 +591,22 @@ rel_ptr eval_rule(const rule &r, const std::map<std::string,rel_ptr> &relations)
 	return ret;
 }
 
-	
-/*
-bool join(const predicate &lhs, const std::vector<const predicate*> &rhs, const std::vector<const relation::row*> &rows, std::unordered_set<relation::row> &out)
-{
-	assert(rows.size() == rhs.size());
-
-	std::map<std::string,unsigned int> bindings;
-	size_t pred = 0;
-
-	while(pred < rhs.size())
-	{
-		const std::vector<variable> &vars = rhs[pred]->variables;
-		const relation::row &row = *rows[pred];
-		size_t col = 0;
-
-		while(col < vars.size())
-		{
-			const variable &var = vars[col];
-			
-			if(var.bound)
-			{
-				if(!(var.instantiation == row[col]))
-					return false;
-			}
-			else
-			{
-				auto i = bindings.find(var.name);
-
-				if(i != bindings.end())
-				{
-					if(!(i->second == row[col]))
-						return false;
-				}
-				else
-				{
-					bindings.insert(std::make_pair(var.name,row[col]));
-				}
-			}
-
-			++col;
-		}
-
-		++pred;
-	}
-	
-	relation::row o;
-
-	for(const variable &v: lhs.variables)
-	{
-		if(v.bound)
-			o.push_back(v.instantiation);
-		else
-		{
-			auto i = bindings.find(v.name);
-
-			assert(i != bindings.end());
-			o.push_back(i->second);
-		}
-	}
-
-	out.insert(o);
-
-	return true;
-}*/
-/*
-rel_ptr select(const predicate &head, const predicate &rhs,rel_ptr rel)
-{
-	assert(rel);
-	rel_ptr ret(new relation());
-
-	ret.mutate([&](std::unordered_set<relation::row> &rows)
-	{
-		for(const relation::row &row: rel->rows())
-		{
-			
-			for(const variable &var: rhs.variables)
-		
-
-rel_ptr single(const rule &r, std::map<std::string,rel_ptr> &rels)
-{	
-	assert(r.body.size());
-
-	if(r.body.size() == 1)
-		return select(r.head,*r.body.begin(),rels[r.body.begin()->name]);
-	else
-	{
-		auto i = r.body.begin();
-		rel_ptr temp_rel(new relation());
-		predicate temp_pred;
-
-		while(std::next(i) != r.body.end())
-		{
-			join(*i,*std::next(i),temp_pred,temp_rel);
-			++i;
-		}
-
-		return select(r.head,temp_pred,temp_rel);
-	}
-	
-	ret.mutate([&](std::unordered_set<relation::row> &ret_rows) -> void
-	{
-		std::vector<const predicate *> rhs;
-		std::vector<const relation::row *> rows;
-		std::function<void(std::list<predicate>::const_iterator)> f = [&](std::list<predicate>::const_iterator i)
-		{
-			assert(rels.count(i->name));
-			const rel_ptr &rel = rels[i->name];
-
-			rhs.push_back(&*i);
-			++i;
-			
-			for(const relation::row &t: rel.rows())
-			{
-				rows.push_back(&t);
-					
-				if(i != r.body.end())
-					f(i);
-				else
-					step(r.head,rhs,rows,ret_rows);
-				
-				rows.pop_back();
-			}
-
-			rhs.pop_back();
-		};
-
-		f(r.body.begin());
-	});
-
-	return ret;
-}*/
-
 rel_ptr eval(parse_i query, std::list<rule> &intensional, std::map<std::string,rel_ptr> &extensional)
 {	
 	std::map<std::string,rel_ptr> rels(extensional);
+	std::map<std::string,rel_ptr> deltas(extensional);
 	std::set<rg_node *> rg_graph = build_graph(intensional);
 
 	// build relations for each predicate
 	for(const rg_node *n: rg_graph)
-		if(n->goal && !rels.count(n->d.goal_node->name))
+		if(n->goal && !deltas.count(n->d.goal_node->name))
 		{
 			const predicate &p = *n->d.goal_node;
 
 			rels.insert(std::make_pair(p.name,rel_ptr(new relation())));
+			deltas.insert(std::make_pair(p.name,rel_ptr(new relation())));
 		}
-	
+
 	for(const std::pair<std::string,rel_ptr> &p: rels)
 		std::cout << p.first << ":" << std::endl << p.second << std::endl;
 
@@ -765,24 +629,83 @@ rel_ptr eval(parse_i query, std::list<rule> &intensional, std::map<std::string,r
 
 	while(!worklist.empty())
 	{
-		bool modified = false;
 		auto i = worklist.begin();
 		const rule *r = *i;
-		rel_ptr rel;
+		unsigned int field;
+		rel_ptr new_delta(new relation());
+		std::list<std::string> derived, base;
 		
 		worklist.erase(i);
 
-		std::cout << "do " << *r << std::endl;
-		rel = eval_rule(*r,rels);
-		std::cout << "result:" << std::endl << rel << std::endl;
-
-		// TODO: make more efficient
-		rel_ptr old = rels[r->head.name];
-		for(const relation::row &r: rel->rows())
-			modified |= old->insert(r);
-
-		if(modified)
+		for(const predicate &p: r->body)
 		{
+			if(extensional.count(p.name))
+				base.push_back(p.name);
+			else
+				derived.push_back(p.name);
+			deltas.insert(std::make_pair(p.name,rels[p.name]));
+		}
+		field = pow(2,derived.size()) - 1; // 1: delta
+
+		std::cout << "do " << *r << std::endl;
+		
+		do
+		{
+			std::map<std::string,rel_ptr> in;
+			unsigned int bit = 0;
+			rel_ptr rel;
+
+			if(field)
+			{
+				while(bit < derived.size())
+				{
+					const std::string &n = *std::next(derived.begin(),bit);
+					if(field & (1 << bit))
+					{
+						in.insert(std::make_pair(n,deltas[n]));
+						std::cout << " dR";
+					}
+					else
+					{
+						in.insert(std::make_pair(n,rels[n]));
+						std::cout << " R";
+					}
+					++bit;
+				}
+				std::cout << std::endl;
+			}
+
+			if(field || derived.empty())
+			{
+				for(const std::string &n: base)
+				{
+					std::cout << n << std::endl;
+					in.insert(std::make_pair(n,rels[n]));
+				}
+				
+				rel = eval_rule(*r,in);
+				
+				for(const relation::row &r: rel->rows())
+					new_delta->insert(r);
+			}
+		}
+		while(field--);
+		
+		std::cout << "new delta" << std::endl << new_delta << std::endl;
+		
+		rel_ptr rel = rels[r->head.name];
+		rel_ptr old_delta = deltas[r->head.name];
+
+		for(const relation::row &r: old_delta->rows())
+			rel->insert(r);
+
+		bool new_round = none_of(new_delta->rows().begin(),new_delta->rows().end(),[&](const relation::row &r) 
+			{ return rel->includes(r); });
+		
+		deltas.erase(r->head.name);
+		if(new_round)
+		{
+
 			for(rg_node *n: rg_graph)
 				if(n->goal && n->d.goal_node->name == r->head.name)
 					for(rg_node *m: n->children)
@@ -790,61 +713,20 @@ rel_ptr eval(parse_i query, std::list<rule> &intensional, std::map<std::string,r
 						assert(!m->goal);
 						worklist.insert(m->d.rule_node);
 					}
-		}	
+		}
+
+		if(!worklist.count(r))
+		{
+			for(const relation::row &r: new_delta->rows())
+				rel->insert(r);
+			deltas.insert(std::make_pair(r->head.name,rel));
+		}
+		else
+			deltas.insert(std::make_pair(r->head.name,new_delta));
+		
+		std::cout << "rel" << std::endl << rel << std::endl;
 	}
 	
 	assert(rels.count(query.parent.name));
 	return rels[query.parent.name];
-}
-
-
-int main(int argc, char *argv[])
-{/*
-	parse parent("parent"),ancestor("ancestor"),age("age"),query("query");
-	rel_ptr parent_rel(new relation()),age_rel(new relation());
-
-	insert_row(parent_rel,std::string("john"),std::string("jack"));
-	insert_row(parent_rel,std::string("john"),std::string("jim"));
-	insert_row(parent_rel,std::string("jack"),std::string("jil"));
-
-	insert_row(age_rel,std::string("john"),(unsigned int)1);
-	insert_row(age_rel,std::string("jack"),(unsigned int)2);
-	insert_row(age_rel,std::string("jil"),(unsigned int)3);
-	insert_row(age_rel,std::string("jim"),(unsigned int)4);
-
-	ancestor("X","Y") >> parent("X","Y");
-	ancestor("X","Z") >> parent("X","Y"),ancestor("Y","Z");
-
-	query("X","A","Y","B") >> ancestor("X","Y"),age("X","A"),age("Y","B");
-
-	std::list<rule> all;
-	std::map<std::string,rel_ptr> db;
-
-	std::copy(ancestor.rules.begin(),ancestor.rules.end(),std::inserter(all,all.end()));
-	std::copy(query.rules.begin(),query.rules.end(),std::inserter(all,all.end()));
-	db.insert(std::make_pair("parent",parent_rel));
-	db.insert(std::make_pair("age",age_rel));
-
-	std::cout << eval(query("X","A","Y","B"),all,db) << std::endl;*/
-
-	rel_ptr parent_rel(new relation());
-	//std::vector<variable> ab({variable(false,"","A"),variable(false,"","B")});
-	insert(parent_rel,"john","jack");
-	insert(parent_rel,"john","jim");
-	insert(parent_rel,"jack","jil");
-	
-	parse parent("parent"),ancestor("ancestor"),age("age"),query("query");
-	ancestor("X","Y") >> parent("X","Y");
-	ancestor("X","Z") >> parent("X","Y"),ancestor("Y","Z");
-
-	query("X","Y") >> ancestor("X","Y");
-
-	std::list<rule> all;
-	std::map<std::string,rel_ptr> db;
-
-	std::copy(ancestor.rules.begin(),ancestor.rules.end(),std::inserter(all,all.end()));
-	std::copy(query.rules.begin(),query.rules.end(),std::inserter(all,all.end()));
-	db.insert(std::make_pair("parent",parent_rel));
-
-	std::cout << eval(query("X","Y"),all,db) << std::endl;
 }

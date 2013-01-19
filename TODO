@@ -1,0 +1,8 @@
+==> Improve find() **DONE**
+	--> use find_helper() to turn `ub' into variable
+
+==> New join algorithm **DONE** 
+	--> correct handling of equal free variables in bindings
+	--> incorporate into relation::find() into join()
+
+==> Semi-naive evaluation (Milestone)

@@ -1,10 +1,10 @@
 CXX = clang++
 CXXARGS = -Wall -Werror -std=c++0x -g
 
-all: dlog
+all: test
 
 %.o: %.cc $(wildcard *.hh)
 	$(CXX) $(CXXARGS) -c -o $@ $<
 
-dlog: dlog.o dsl.o
-	$(CXX) -o  $@ $^
+test: dlog.o dsl.o test.o
+	$(CXX) -lcppunit -o $@ $^
