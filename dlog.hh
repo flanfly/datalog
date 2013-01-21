@@ -122,19 +122,9 @@ struct rule
 	predicate head;
 	std::list<predicate> body;
 };
+typedef std::shared_ptr<rule> rule_ptr;
 
 std::ostream &operator<<(std::ostream &os, const rule &r);
-
-struct rg_node
-{
-	rg_node(rule *r);
-	rg_node(predicate *p);
-
-	bool goal;
-	union { rule *rule_node; predicate *goal_node; } d;
-
-	std::set<rg_node *> children;
-};
 
 template<typename... Args>
 void insert(rel_ptr rel, Args&&... args)
@@ -168,8 +158,7 @@ rel_ptr find(rel_ptr rel, Args&&... args)
 	return ret;
 }
 
-std::set<rg_node *> build_graph(std::list<rule> &rules);
-std::ostream &operator<<(std::ostream &os, const rel_ptr &a);
-rel_ptr eval(class parse_i query, std::list<rule> &in, std::map<std::string,rel_ptr> &extensional);
+std::ostream &operator<<(std::ostream &os, const relation &a);
+rel_ptr eval(class parse_i query, std::multimap<std::string,rule_ptr> &in, std::map<std::string,rel_ptr> &extensional);
 
 #endif

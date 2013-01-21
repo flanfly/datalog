@@ -40,7 +40,7 @@ struct parse
 	}
 
 	std::string name;
-	std::vector<rule> rules;
+	std::vector<rule_ptr> rules;
 };
 
 class parse_h

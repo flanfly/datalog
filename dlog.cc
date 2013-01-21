@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 
 #include "dlog.hh"
 #include "dsl.hh"
@@ -281,113 +282,15 @@ std::ostream &operator<<(std::ostream &os, const rule &r)
 	return os;
 }
 
-rg_node::rg_node(rule *r) : goal(false) { d.rule_node = r; }
-rg_node::rg_node(predicate *p) : goal(true) { d.goal_node = p; }
-
-std::set<rg_node *> build_graph(std::list<rule> &rules)
-{	
-	std::map<std::string,rg_node *> pred_map;
-	std::map<rule *,rg_node *> rule_map;
-	std::set<rg_node *> ret;
-
-	// build node table, one for each rule and each predicate
-	for(rule &r: rules)
-	{
-		assert(!rule_map.count(&r));
-
-		rule_map.insert(std::make_pair(&r,new rg_node(&r)));
-		
-		if(!pred_map.count(r.head.name))
-			pred_map.insert(std::make_pair(r.head.name,new rg_node(&r.head)));
-		for(predicate &p: r.body)
-			if(!pred_map.count(p.name))
-				pred_map.insert(std::make_pair(p.name,new rg_node(&p)));
-	}
-
-	// connect rg_node's
-	for(rule &r: rules)
-	{
-		rg_node *rule_node = rule_map[&r];
-		rg_node *head_node = pred_map[r.head.name];
-
-		rule_node->children.insert(head_node);
-
-		for(predicate &p: r.body)
-		{
-			rg_node *pred_node = pred_map[p.name];
-			
-			pred_node->children.insert(rule_node);
-		}
-	}
-	
-	std::cout << "digraph G" << std::endl 
-						<< "{" << std::endl;
-
-	for(const std::pair<rule *,rg_node *> &p: rule_map)
-	{
-		std::cout << "\tn" << (size_t)p.second << " [label=\"" << *p.first << "\" shape=ellipse];" << std::endl;
-		for(rg_node *q: p.second->children)
-			std::cout << "\tn" << (size_t)p.second << " -> n" << (size_t)q << std::endl;
-	}
-	
-	for(const std::pair<std::string,rg_node *> &p: pred_map)
-	{
-		std::cout << "\tn" << (size_t)p.second << " [label=\"" << p.first << "\" shape=box];" << std::endl;
-		for(rg_node *q: p.second->children)
-			std::cout << "\tn" << (size_t)p.second << " -> n" << (size_t)q << std::endl;
-	}
-	
-	std::cout << "}" << std::endl;
-
-	std::transform(rule_map.begin(),rule_map.end(),std::inserter(ret,ret.begin()),[&](std::pair<rule *,rg_node *> p) { return p.second; });
-	std::transform(pred_map.begin(),pred_map.end(),std::inserter(ret,ret.begin()),[&](std::pair<std::string,rg_node *> p) { return p.second; });
-
-	std::function<bool(const rg_node *,const rg_node *)> mutual_rec = [&](const rg_node *from, const rg_node *to) -> bool
-	{
-		std::set<const rg_node *> known;
-		std::function<bool(const rg_node *,const rg_node *)> dfs = [&](const rg_node *cur, const rg_node *goal) -> bool
-		{
-			if(cur == goal)
-				return true;
-			else
-			{
-				known.insert(cur);
-				return !!cur->children.size() && any_of(cur->children.begin(),cur->children.end(),[&](const rg_node *n) { return !known.count(n) && dfs(n,goal); });
-			}
-		};
-		
-		if(dfs(from,to))
-		{
-			known.clear();
-			return dfs(to,from);
-		}
-		else
-			return false;
-	};
-
-	for(rg_node *a: ret)
-		for(rg_node *b: ret)
-			if(a->goal == b->goal && a != b && mutual_rec(a,b))
-				std::cout << (a->goal ? *a->d.goal_node : *a->d.rule_node) << " and " << (b->goal ? *b->d.goal_node : *b->d.rule_node) << " are mutual recrusive" << std::endl;
-	
-	return ret;
-}
-
-std::ostream &operator<<(std::ostream &os, const rel_ptr &a)
+std::ostream &operator<<(std::ostream &os, const relation &a)
 {
-	if(!a)
-	{
-		os << "NULL" << std::endl;
-		return os;
-	}
-		
-	if(a->rows().empty())
+	if(a.rows().empty())
 	{
 		os << "empty" << std::endl;
 		return os;
 	}
 
-	const size_t cols = a->rows().begin()->size();
+	const size_t cols = a.rows().begin()->size();
 	size_t *widths = new size_t[cols];
 	std::list<std::list<std::string>> text;
 	size_t col = 0;
@@ -398,8 +301,8 @@ std::ostream &operator<<(std::ostream &os, const rel_ptr &a)
 	 	++col;
 	}
 
-	auto row = a->rows().begin();
-	while(row != a->rows().end())
+	auto row = a.rows().begin();
+	while(row != a.rows().end())
 	{
 		col = 0;
 		
@@ -511,22 +414,23 @@ rel_ptr join(const std::vector<variable> &a_bind,const rel_ptr a_rel,const std::
 	return ret;
 }
 
-rel_ptr eval_rule(const rule &r, const std::map<std::string,rel_ptr> &relations)
+rel_ptr eval_rule(const rule_ptr r, const std::map<std::string,rel_ptr> &relations)
 {
+	assert(r);
+
 	rel_ptr temp(new relation());
 	std::vector<variable> binding;
 
-	if(r.body.empty())
+	if(r->body.empty())
 		return temp;
 
-
-	if(r.body.size() > 1)
+	if(r->body.size() > 1)
 	{
-		auto i = r.body.begin();
+		auto i = r->body.begin();
 
-		while(i != r.body.end())
+		while(i != r->body.end())
 		{
-			if(i == r.body.begin())
+			if(i == r->body.begin())
 			{
 				temp = join(i->variables,relations.at(i->name),std::next(i)->variables,relations.at(std::next(i)->name));
 				binding = i->variables;
@@ -544,14 +448,14 @@ rel_ptr eval_rule(const rule &r, const std::map<std::string,rel_ptr> &relations)
 	}
 	else
 	{
-		const rel_ptr rel = relations.at(r.body.front().name);
-		std::set<unsigned int> *s = rel->find(r.body.front().variables);
+		const rel_ptr rel = relations.at(r->body.front().name);
+		std::set<unsigned int> *s = rel->find(r->body.front().variables);
 
 		if(s)
 		{
 			for(unsigned int i: *s)
 				temp->insert(rel->rows()[i]);
-			binding = r.body.front().variables;
+			binding = r->body.front().variables;
 			delete s;
 		}
 	}
@@ -559,7 +463,7 @@ rel_ptr eval_rule(const rule &r, const std::map<std::string,rel_ptr> &relations)
 	// project onto head predicate
 	std::map<std::string,unsigned int> common; // varname -> temp rel column
 
-	for(const variable &v: r.head.variables)
+	for(const variable &v: r->head.variables)
 	{
 		if(!v.bound)
 		{
@@ -580,7 +484,7 @@ rel_ptr eval_rule(const rule &r, const std::map<std::string,rel_ptr> &relations)
 	{
 		relation::row nr;
 
-		for(const variable &v: r.head.variables)
+		for(const variable &v: r->head.variables)
 			if(v.bound)
 				nr.push_back(v.instantiation);
 			else
@@ -591,142 +495,82 @@ rel_ptr eval_rule(const rule &r, const std::map<std::string,rel_ptr> &relations)
 	return ret;
 }
 
-rel_ptr eval(parse_i query, std::list<rule> &intensional, std::map<std::string,rel_ptr> &extensional)
-{	
-	std::map<std::string,rel_ptr> rels(extensional);
-	std::map<std::string,rel_ptr> deltas(extensional);
-	std::set<rg_node *> rg_graph = build_graph(intensional);
-
-	// build relations for each predicate
-	for(const rg_node *n: rg_graph)
-		if(n->goal && !deltas.count(n->d.goal_node->name))
-		{
-			const predicate &p = *n->d.goal_node;
-
-			rels.insert(std::make_pair(p.name,rel_ptr(new relation())));
-			deltas.insert(std::make_pair(p.name,rel_ptr(new relation())));
-		}
-
-	for(const std::pair<std::string,rel_ptr> &p: rels)
-		std::cout << p.first << ":" << std::endl << p.second << std::endl;
-
-	std::set<rg_node *> roots(rg_graph);
-	std::set<const rule *> worklist;
-
-	for(rg_node *n: rg_graph)
-		if(!n->goal)
-			roots.erase(n);
-		else
-			for(rg_node *m: n->children)
-				roots.erase(m);
-				
-	for(rg_node *n: roots)
-		for(rg_node *m: n->children)
-		{
-			assert(!m->goal);
-			worklist.insert(m->d.rule_node);
-		}
-
-	while(!worklist.empty())
+bool derives(const std::multimap<std::string,rule_ptr> &idb, std::string a, std::string b)
+{
+	std::set<std::string> known;
+	std::function<bool(const rule_ptr)> check = [&](const rule_ptr r)
 	{
-		auto i = worklist.begin();
-		const rule *r = *i;
-		unsigned int field;
-		rel_ptr new_delta(new relation());
-		std::list<std::string> derived, base;
-		
-		worklist.erase(i);
+		return any_of(r->body.begin(),r->body.end(),[&](const predicate &p) 
+		{ 
+			return p.name == b || 
+						 (known.insert(p.name).second && any_of(idb.lower_bound(p.name),idb.upper_bound(p.name),[&](const std::pair<std::string,rule_ptr> &q)
+						 		{ return check(q.second); }));
+		});
+	};
+	return any_of(idb.lower_bound(a),idb.upper_bound(a),[&](const std::pair<std::string,rule_ptr> &q) { return check(q.second); });
+}
 
-		for(const predicate &p: r->body)
-		{
-			if(extensional.count(p.name))
-				base.push_back(p.name);
-			else
-				derived.push_back(p.name);
-			deltas.insert(std::make_pair(p.name,rels[p.name]));
-		}
-		field = pow(2,derived.size()) - 1; // 1: delta
+bool mutual_rec(const std::multimap<std::string,rule_ptr> &idb, std::string a, std::string b)
+{
+	return a == b || (derives(idb,a,b) && derives(idb,b,a));
+}
 
-		std::cout << "do " << *r << std::endl;
-		
-		do
-		{
-			std::map<std::string,rel_ptr> in;
-			unsigned int bit = 0;
-			rel_ptr rel;
+rel_ptr eval(parse_i query, std::multimap<std::string,rule_ptr> &idb, std::map<std::string,rel_ptr> &edb)
+{
+	std::list<std::string> partition; // result of partitioning the idb predicates with mutual_rec()
 
-			if(field)
-			{
-				while(bit < derived.size())
-				{
-					const std::string &n = *std::next(derived.begin(),bit);
-					if(field & (1 << bit))
-					{
-						in.insert(std::make_pair(n,deltas[n]));
-						std::cout << " dR";
-					}
-					else
-					{
-						in.insert(std::make_pair(n,rels[n]));
-						std::cout << " R";
-					}
-					++bit;
-				}
-				std::cout << std::endl;
-			}
-
-			if(field || derived.empty())
-			{
-				for(const std::string &n: base)
-				{
-					std::cout << n << std::endl;
-					in.insert(std::make_pair(n,rels[n]));
-				}
-				
-				rel = eval_rule(*r,in);
-				
-				for(const relation::row &r: rel->rows())
-					new_delta->insert(r);
-			}
-		}
-		while(field--);
-		
-		std::cout << "new delta" << std::endl << new_delta << std::endl;
-		
-		rel_ptr rel = rels[r->head.name];
-		rel_ptr old_delta = deltas[r->head.name];
-
-		for(const relation::row &r: old_delta->rows())
-			rel->insert(r);
-
-		bool new_round = none_of(new_delta->rows().begin(),new_delta->rows().end(),[&](const relation::row &r) 
-			{ return rel->includes(r); });
-		
-		deltas.erase(r->head.name);
-		if(new_round)
-		{
-
-			for(rg_node *n: rg_graph)
-				if(n->goal && n->d.goal_node->name == r->head.name)
-					for(rg_node *m: n->children)
-					{
-						assert(!m->goal);
-						worklist.insert(m->d.rule_node);
-					}
-		}
-
-		if(!worklist.count(r))
-		{
-			for(const relation::row &r: new_delta->rows())
-				rel->insert(r);
-			deltas.insert(std::make_pair(r->head.name,rel));
-		}
-		else
-			deltas.insert(std::make_pair(r->head.name,new_delta));
-		
-		std::cout << "rel" << std::endl << rel << std::endl;
-	}
+	for(const std::pair<std::string,rule_ptr> &p: idb)
+		if(std::find(partition.begin(),partition.end(),p.first) == partition.end())
+			partition.push_back(p.first);
 	
-	assert(rels.count(query.parent.name));
-	return rels[query.parent.name];
+	partition.sort([&](const std::string &a, const std::string &b) -> bool
+	{
+		if(a == b)
+			return false;
+
+		int ab = derives(idb,a,b);
+		int ba = derives(idb,b,a);
+
+		return ab < ba;
+	});
+
+	auto idx = partition.begin();
+	std::map<std::string,rel_ptr> rels(edb);
+
+	while(idx != partition.end())
+	{
+		auto idx_end = std::find_if(idx,partition.end(),[&](const std::string &s) { return !mutual_rec(idb,*idx,s); });
+		std::map<std::string,rel_ptr> deltas;
+		std::set<rule_ptr> simple, recursive;
+		const unsigned int pos = std::distance(partition.begin(),idx);
+
+		std::for_each(idx,idx_end,[&](const std::string &s)
+		{
+			std::for_each(idb.lower_bound(s),idb.upper_bound(s),[&](const std::pair<std::string,rule_ptr> &p)
+			{
+				bool is_recu = !std::all_of(p.second->body.begin(),p.second->body.end(),[&](const predicate &pred)
+					{ return edb.count(pred.name) > 0 || pos > std::distance(partition.begin(),std::find(partition.begin(),partition.end(),pred.name)); });
+
+				if(is_recu)
+					recursive.insert(p.second);
+				else
+					simple.insert(p.second);
+			});
+		});
+
+		std::cout << "simple:" << std::endl;
+		for(rule_ptr r: simple) std::cout << *r << std::endl;
+		
+		std::cout << "recu:" << std::endl;
+		for(rule_ptr r: recursive) std::cout << *r << std::endl;
+		
+		// eval all rules w/ body predicates in edb or <idx once
+
+
+		// eval all rec rules in parallel until fixpoint is reached
+
+		idx = idx_end;
+	}
+
+	return rel_ptr(0);
 }
