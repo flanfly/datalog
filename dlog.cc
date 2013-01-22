@@ -558,13 +558,18 @@ rel_ptr eval(parse_i query, std::multimap<std::string,rule_ptr> &idb, std::map<s
 			});
 		});
 
-		std::cout << "simple:" << std::endl;
-		for(rule_ptr r: simple) std::cout << *r << std::endl;
 		
 		std::cout << "recu:" << std::endl;
 		for(rule_ptr r: recursive) std::cout << *r << std::endl;
 		
 		// eval all rules w/ body predicates in edb or <idx once
+		std::cout << "one shot:" << std::endl;
+		for(rule_ptr r: simple)
+		{
+			assert(r);
+			std::cout << *r << std::endl;
+
+
 
 
 		// eval all rec rules in parallel until fixpoint is reached
