@@ -42,3 +42,5 @@ parse_h operator>>(parse_i lhs, parse_i rhs)
 	//std::cout << "operator>>(i,i)" << std::endl;
 	return parse_h(lhs,rhs);
 }
+
+parse_i operator!(

@@ -217,13 +217,13 @@ variable symbolic(std::string n)
 }
 
 predicate::predicate(std::string n, std::initializer_list<variable> &lst)
-: name(n), variables(lst)
+: name(n), variables(lst), negated(false)
 {
 	return;
 } 
 
 predicate::predicate(std::string n, const std::vector<variable> &lst)
-: name(n), variables(lst)
+: name(n), variables(lst), negated(false)
 {
 	return;
 }
@@ -235,7 +235,7 @@ bool operator==(const predicate &a, const predicate &b)
 
 std::ostream &operator<<(std::ostream &os, const predicate &p)
 {
-	os << p.name << "(";
+	os << (p.negated ? "!" : "") << p.name << "(";
 	
 	for(const variable &v: p.variables)
 		if(v == *std::prev(p.variables.end(),1))

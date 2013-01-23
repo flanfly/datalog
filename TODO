@@ -5,4 +5,11 @@
 	--> correct handling of equal free variables in bindings
 	--> incorporate into relation::find() into join()
 
-==> Semi-naive evaluation (Milestone)
+==> Semi-naive evaluation (Milestone) **DONE**
+
+==> Negation
+
+==> Sanity checks in 'eval' and useful exceptions
+	--> See 'Database Systems' for invariants
+
+==> Linear constraints (>,<,<=,>=)

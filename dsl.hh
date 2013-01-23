@@ -21,6 +21,7 @@ public:
 	parse &parent;
 	std::vector<variable> variables;
 	std::list<parse_i> tail;
+	bool negated;
 
 	friend struct parse;
 	friend parse_i operator,(parse_i lhs, parse_i rhs);
@@ -102,6 +103,7 @@ void fill(std::list<variable> &p, const char *head, Tail&&... tail)
 	fill(p,tail...);
 }
 
+parse_i operator!(parse_i i);
 parse_h operator,(parse_h h, parse_i i);
 parse_h operator>>(parse_i lhs, parse_i rhs);
 

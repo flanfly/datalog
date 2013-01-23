@@ -102,12 +102,12 @@ variable symbolic(std::string n);
 
 struct predicate
 {
-	predicate(std::string n, rel_ptr r);
 	predicate(std::string n, std::initializer_list<variable> &lst);
 	predicate(std::string n, const std::vector<variable> &lst);
 
 	std::string name;
 	std::vector<variable> variables;
+	bool negated;
 };
 
 bool operator==(const predicate &a, const predicate &b);
