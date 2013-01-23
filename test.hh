@@ -7,7 +7,6 @@ class DESTest : public CppUnit::TestFixture
 {
 	CPPUNIT_TEST_SUITE(DESTest);
 	CPPUNIT_TEST(testFamily);
-	CPPUNIT_TEST(testMutualRec);
 	CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -27,6 +26,24 @@ public:
 		insert(mother_rel,"amy","fred");
 		insert(mother_rel,"carol_I","carol_II");
 		insert(mother_rel,"carol_II","carol_III");
+		
+		rel_ptr expected_rel(new relation());
+		insert(expected_rel,"amy","carol_III");
+		insert(expected_rel,"amy","fred");
+		insert(expected_rel,"carol_I","carol_II");
+		insert(expected_rel,"carol_I","carol_III");
+		insert(expected_rel,"carol_II","carol_III");
+		insert(expected_rel,"fred","carol_III");
+		insert(expected_rel,"grace","amy");
+		insert(expected_rel,"grace","carol_III");
+		insert(expected_rel,"grace","fred");
+		insert(expected_rel,"jack","carol_III");
+		insert(expected_rel,"jack","fred");
+		insert(expected_rel,"tom","amy");
+		insert(expected_rel,"tom","carol_III");
+		insert(expected_rel,"tom","fred");
+		insert(expected_rel,"tony","carol_II");
+		insert(expected_rel,"tony","carol_III");
 
 		parse parent("parent"),ancestor("ancestor"),father("father"),mother("mother"),answer("answer");
 
@@ -47,28 +64,11 @@ public:
 		edb.insert(std::make_pair("mother",mother_rel));
 		edb.insert(std::make_pair("father",father_rel));
 
-		std::cout << eval(answer("X","Y"),idb,edb) << std::endl;
-	}
+		rel_ptr res = eval("answer",idb,edb);
 
-	void testMutualRec(void)
-	{	
-		parse a("a"),b("b"),c("c"),answer("answer");
-
-		a("X") >> a("X"),b("X");
-//		b("X") >> a("X");
-		b("X") >> c("X");
-		c("X") >> a("X");
-
-		answer("X") >> a("X");
-		std::map<std::string,rel_ptr> edb;
-		std::multimap<std::string,rule_ptr> idb;
-
-		std::for_each(a.rules.begin(),a.rules.end(),[&](rule_ptr r) { idb.insert(std::make_pair(r->head.name,r)); });
-		std::for_each(b.rules.begin(),b.rules.end(),[&](rule_ptr r) { idb.insert(std::make_pair(r->head.name,r)); });
-		std::for_each(c.rules.begin(),c.rules.end(),[&](rule_ptr r) { idb.insert(std::make_pair(r->head.name,r)); });
-		std::for_each(answer.rules.begin(),answer.rules.end(),[&](rule_ptr r) { idb.insert(std::make_pair(r->head.name,r)); });
-		edb.insert(std::make_pair("c",rel_ptr(new relation())));
-
-		std::cout << eval(answer("X"),idb,edb) << std::endl;
+		CPPUNIT_ASSERT(res);
+		CPPUNIT_ASSERT_EQUAL(res->rows().size(),(unsigned long)16);
+		for(const relation::row &r: expected_rel->rows())
+			CPPUNIT_ASSERT(res->includes(r));
 	}
 };

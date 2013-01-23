@@ -159,6 +159,6 @@ rel_ptr find(rel_ptr rel, Args&&... args)
 }
 
 std::ostream &operator<<(std::ostream &os, const relation &a);
-rel_ptr eval(class parse_i query, std::multimap<std::string,rule_ptr> &in, std::map<std::string,rel_ptr> &extensional);
+rel_ptr eval(std::string query, std::multimap<std::string,rule_ptr> &in, std::map<std::string,rel_ptr> &extensional);
 
 #endif

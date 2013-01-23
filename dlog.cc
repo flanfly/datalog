@@ -414,7 +414,7 @@ rel_ptr join(const std::vector<variable> &a_bind,const rel_ptr a_rel,const std::
 	return ret;
 }
 
-rel_ptr eval_rule(const rule_ptr r, const std::map<std::string,rel_ptr> &relations)
+rel_ptr eval_rule(const rule_ptr r, const std::vector<rel_ptr> &relations)
 {
 	assert(r);
 
@@ -432,14 +432,14 @@ rel_ptr eval_rule(const rule_ptr r, const std::map<std::string,rel_ptr> &relatio
 		{
 			if(i == r->body.begin())
 			{
-				temp = join(i->variables,relations.at(i->name),std::next(i)->variables,relations.at(std::next(i)->name));
+				temp = join(i->variables,relations[0],std::next(i)->variables,relations[1]);
 				binding = i->variables;
 
 				++i;
 			}
 			else
 			{
-				temp = join(binding,temp,i->variables,relations.at(i->name));
+				temp = join(binding,temp,i->variables,relations[std::distance(r->body.begin(),i)]);
 			}
 
 			std::copy(i->variables.begin(),i->variables.end(),std::inserter(binding,binding.end()));
@@ -448,7 +448,7 @@ rel_ptr eval_rule(const rule_ptr r, const std::map<std::string,rel_ptr> &relatio
 	}
 	else
 	{
-		const rel_ptr rel = relations.at(r->body.front().name);
+		const rel_ptr rel = relations[0];
 		std::set<unsigned int> *s = rel->find(r->body.front().variables);
 
 		if(s)
@@ -517,8 +517,10 @@ bool mutual_rec(const std::multimap<std::string,rule_ptr> &idb, std::string a, s
 	return a == b || (derives(idb,a,b) && derives(idb,b,a));
 }
 
-rel_ptr eval(parse_i query, std::multimap<std::string,rule_ptr> &idb, std::map<std::string,rel_ptr> &edb)
+rel_ptr eval(std::string query, std::multimap<std::string,rule_ptr> &idb, std::map<std::string,rel_ptr> &edb)
 {
+	// TODO only include rules that 'query' depends upon
+	
 	std::list<std::string> partition; // result of partitioning the idb predicates with mutual_rec()
 
 	for(const std::pair<std::string,rule_ptr> &p: idb)
@@ -567,8 +569,13 @@ rel_ptr eval(parse_i query, std::multimap<std::string,rule_ptr> &idb, std::map<s
 			assert(r);
 			std::cout << *r << std::endl;
 
+			std::vector<rel_ptr> plan;
 			const std::string &n = r->head.name;
-			rel_ptr res = eval_rule(r,rels);
+
+			for(const predicate &p: r->body)
+				plan.push_back(rels[p.name]);
+
+			rel_ptr res = eval_rule(r,plan);
 
 			if(res)
 			{
@@ -585,9 +592,30 @@ rel_ptr eval(parse_i query, std::multimap<std::string,rule_ptr> &idb, std::map<s
 		}
 
 		// eval all rec rules in parallel until fixpoint is reached
-		std::cout << "recursive:" << std::endl;
+		std::cout << "recursive first:" << std::endl;
 		bool modified;
+		
+		for(rule_ptr r: recursive)
+		{
+			assert(r);
+			std::cout << *r << std::endl;
 
+			std::vector<rel_ptr> plan;
+			const std::string &n = r->head.name;
+
+			for(const predicate &p: r->body)
+				plan.push_back(rels[p.name]);
+
+			rel_ptr res = eval_rule(r,plan);
+
+			if(res)
+			{
+				deltas.insert(std::make_pair(n,res));
+				std::cout << *res << std::endl;
+			}
+		}
+		
+		std::cout << "recursive delta:" << std::endl;
 		do
 		{
 			modified = false;
@@ -598,25 +626,61 @@ rel_ptr eval(parse_i query, std::multimap<std::string,rule_ptr> &idb, std::map<s
 				std::cout << *r << std::endl;
 
 				const std::string &n = r->head.name;
-				rel_ptr res = eval_rule(r,rels);
+				std::vector<rel_ptr> plan(r->body.size(),rel_ptr(0));
+				unsigned int sub = std::pow(2,r->body.size()) - 2;	// 1: current, 0: delta
 
-				if(res)
+				do
 				{
-					rel_ptr old = rels.count(n) ? rels[n] : 0;
+					unsigned int pi = 0;
+					rel_ptr res, delta, cur;
 
-					if(old)
+					while(pi < r->body.size())
 					{
+						const std::string &pn = std::next(r->body.begin(),pi)->name;
+
+						if(sub & (1 << pi))
+						{
+							assert(rels.count(pn) && rels[pn]);
+							plan[pi] = rels[pn];
+						}
+						else
+						{
+							if(!deltas.count(pn) || !deltas[pn])
+								goto out;
+
+							plan[pi] = deltas[pn];
+						}
+
+						++pi;
+					}
+
+					res = eval_rule(r,plan);
+					delta = deltas.count(n) ? deltas[n] : 0;
+					cur = rels.count(n) ? rels[n] : 0;
+
+					// merge old delta
+					if(delta)
+					{
+						if(cur)
+							for(const relation::row &r: delta->rows())
+								cur->insert(r);
+						else
+							rels.insert(std::make_pair(n,delta));
+					}
+
+					cur = rels[n];
+					deltas.erase(n);
+					deltas.insert(std::make_pair(n,res));
+
+					if(res)
 						for(const relation::row &r: res->rows())
-							modified |= old->insert(r);
-					}
-					else
-					{
-						modified = true;
-						rels.insert(std::make_pair(n,res));
-					}
+							modified |= !cur->includes(r);
 
 					std::cout << *res << std::endl;
+					out:
+						;
 				}
+				while(sub--);
 			}
 		}
 		while(modified);
@@ -624,5 +688,6 @@ rel_ptr eval(parse_i query, std::multimap<std::string,rule_ptr> &idb, std::map<s
 		idx = idx_end;
 	}
 
-	return rel_ptr(0);
+	assert(rels.count(query));
+	return rels[query];
 }
