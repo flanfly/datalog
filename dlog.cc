@@ -498,7 +498,9 @@ rel_ptr eval_rule(const rule_ptr r, const std::map<std::string,rel_ptr> &relatio
 bool derives(const std::multimap<std::string,rule_ptr> &idb, std::string a, std::string b)
 {
 	std::set<std::string> known;
-	std::function<bool(const rule_ptr)> check = [&](const rule_ptr r)
+	std::function<bool(const rule_ptr)> check;
+	
+	check = [&](const rule_ptr r)
 	{
 		return any_of(r->body.begin(),r->body.end(),[&](const predicate &p) 
 		{ 
@@ -558,10 +560,6 @@ rel_ptr eval(parse_i query, std::multimap<std::string,rule_ptr> &idb, std::map<s
 			});
 		});
 
-		
-		std::cout << "recu:" << std::endl;
-		for(rule_ptr r: recursive) std::cout << *r << std::endl;
-		
 		// eval all rules w/ body predicates in edb or <idx once
 		std::cout << "one shot:" << std::endl;
 		for(rule_ptr r: simple)
@@ -569,11 +567,60 @@ rel_ptr eval(parse_i query, std::multimap<std::string,rule_ptr> &idb, std::map<s
 			assert(r);
 			std::cout << *r << std::endl;
 
+			const std::string &n = r->head.name;
+			rel_ptr res = eval_rule(r,rels);
 
+			if(res)
+			{
+				rel_ptr old = rels.count(n) ? rels[n] : 0;
 
+				if(old)
+					for(const relation::row &r: res->rows())
+						old->insert(r);
+				else
+					rels.insert(std::make_pair(n,res));
+				
+				std::cout << *res << std::endl;
+			}
+		}
 
 		// eval all rec rules in parallel until fixpoint is reached
+		std::cout << "recursive:" << std::endl;
+		bool modified;
 
+		do
+		{
+			modified = false;
+
+			for(const rule_ptr r: recursive)
+			{
+				assert(r);
+				std::cout << *r << std::endl;
+
+				const std::string &n = r->head.name;
+				rel_ptr res = eval_rule(r,rels);
+
+				if(res)
+				{
+					rel_ptr old = rels.count(n) ? rels[n] : 0;
+
+					if(old)
+					{
+						for(const relation::row &r: res->rows())
+							modified |= old->insert(r);
+					}
+					else
+					{
+						modified = true;
+						rels.insert(std::make_pair(n,res));
+					}
+
+					std::cout << *res << std::endl;
+				}
+			}
+		}
+		while(modified);
+		
 		idx = idx_end;
 	}
 

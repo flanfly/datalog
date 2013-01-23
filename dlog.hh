@@ -25,7 +25,7 @@ struct rg_node;
 struct rule;
 
 struct ub {};
-static ub ubound;
+//static ub ubound;
 
 typedef boost::variant<unsigned int,std::string> variant;
 
