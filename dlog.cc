@@ -216,14 +216,14 @@ variable symbolic(std::string n)
 	return variable(false,false,n);
 }
 
-predicate::predicate(std::string n, std::initializer_list<variable> &lst)
-: name(n), variables(lst), negated(false)
+predicate::predicate(std::string n, std::initializer_list<variable> &lst, bool m)
+: name(n), variables(lst), negated(m)
 {
 	return;
 } 
 
-predicate::predicate(std::string n, const std::vector<variable> &lst)
-: name(n), variables(lst), negated(false)
+predicate::predicate(std::string n, const std::vector<variable> &lst, bool m)
+: name(n), variables(lst), negated(m)
 {
 	return;
 }
@@ -424,61 +424,117 @@ rel_ptr eval_rule(const rule_ptr r, const std::vector<rel_ptr> &relations)
 	if(r->body.empty())
 		return temp;
 
-	if(r->body.size() > 1)
+	// non-negated predicates
+	if(std::count_if(r->body.begin(),r->body.end(),[](const predicate &p) { return !p.negated; }) > 1)
 	{
 		auto i = r->body.begin();
+		bool first = true;
 
 		while(i != r->body.end())
 		{
-			if(i == r->body.begin())
+			if(!i->negated)
 			{
-				temp = join(i->variables,relations[0],std::next(i)->variables,relations[1]);
-				binding = i->variables;
+				if(first)
+				{
+					unsigned int j = std::distance(r->body.begin(),i);
+					temp = join(i->variables,relations[j],std::next(i)->variables,relations[j+1]);
+					binding = i->variables;
 
-				++i;
-			}
-			else
-			{
-				temp = join(binding,temp,i->variables,relations[std::distance(r->body.begin(),i)]);
+					++i;
+					first = false;
+				}
+				else
+				{
+					temp = join(binding,temp,i->variables,relations[std::distance(r->body.begin(),i)]);
+				}
+				
+				std::copy(i->variables.begin(),i->variables.end(),std::inserter(binding,binding.end()));
 			}
 
-			std::copy(i->variables.begin(),i->variables.end(),std::inserter(binding,binding.end()));
+
 			++i;
 		}
 	}
 	else
 	{
-		const rel_ptr rel = relations[0];
-		std::set<unsigned int> *s = rel->find(r->body.front().variables);
+		unsigned int i = std::distance(r->body.begin(),std::find_if(r->body.begin(),r->body.end(),[](const predicate &p) { return !p.negated; }));
+		const rel_ptr rel = relations[i];
+		const std::vector<variable> &vars = std::next(r->body.begin(),i)->variables;
+		std::set<unsigned int> *s = rel->find(vars);
 
 		if(s)
 		{
 			for(unsigned int i: *s)
 				temp->insert(rel->rows()[i]);
-			binding = r->body.front().variables;
+			binding = vars;
 			delete s;
 		}
 	}
 
-	// project onto head predicate
-	std::map<std::string,unsigned int> common; // varname -> temp rel column
-
-	for(const variable &v: r->head.variables)
+	// build index from varname to column number in temporary relation 'temp'
+	std::unordered_map<std::string,unsigned int> common; // varname -> temp rel column
+	auto j = binding.begin();
+	while(j != binding.end())
 	{
-		if(!v.bound)
-		{
-			auto i = binding.begin();
-			while(i != binding.end())
-			{
-				const variable &w = *i;
-				if(!w.bound && v.name == w.name)
-					common.insert(std::make_pair(v.name,std::distance(binding.begin(),i)));
-
-				++i;
-			}
-		}
+		const variable &w = *j;
+		
+		if(!w.bound)
+			common.insert(std::make_pair(w.name,std::distance(binding.begin(),j)));
+		++j;
 	}
 
+	std::cout << "common: " << std::endl;
+	for(const std::pair<std::string,unsigned int> &p: common)
+		std::cout << p.first << " at col " << p.second << ", ";
+	std::cout << std::endl << "pre negation:" << std::endl << *temp << std::endl;
+
+	// negated predicates
+	auto i = r->body.begin();
+
+	while(i != r->body.end())
+	{
+		if(i->negated)
+		{
+			rel_ptr rel = relations[std::distance(r->body.begin(),i)];
+			relation::row b(i->variables.size(),"");
+			unsigned int j = 0;
+
+			while(j < i->variables.size())
+			{
+				if(i->variables[j].bound)
+					b[j] = i->variables[j].instantiation;
+				++j;
+			}
+
+			temp->reject([&](const relation::row &r) -> bool
+			{
+				j = 0;
+
+				while(j < i->variables.size())
+				{
+					if(!i->variables[j].bound)
+						b[j] = r[common[i->variables[j].name]];
+					++j;
+				}
+				
+				if(rel->includes(b))
+				{
+					std::cout << "reject ";
+					for(const variant &v: b)
+						std::cout << v << " " << std::endl;
+					return true;
+				}
+				else
+					return false;
+			});
+		}
+
+		++i;
+	}
+	
+	std::cout << "post negation:" << std::endl << *temp << std::endl;
+
+	// project onto head predicate
 	rel_ptr ret(new relation());
 	for(const relation::row &rr: temp->rows())
 	{

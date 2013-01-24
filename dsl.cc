@@ -9,7 +9,7 @@ parse::parse(std::string n)
 parse_h::parse_h(parse_i &head, parse_i &tail)
 : parent(head.parent), variables(head.variables)
 {
-	parent.rules.push_back(rule_ptr(new rule(predicate(head.parent.name,head.variables),{predicate(tail.parent.name,tail.variables)})));
+	parent.rules.push_back(rule_ptr(new rule(predicate(head.parent.name,head.variables,false),{predicate(tail.parent.name,tail.variables,tail.negated)})));
 	index = parent.rules.size() - 1;
 }
 
@@ -33,7 +33,7 @@ void fill(std::list<variable> &p)
 parse_h operator,(parse_h h, parse_i i)
 {
 	//std::cout << "operator,(h,i)" << std::endl;
-	h.parent.rules[h.index]->body.push_back(predicate(i.parent.name,i.variables));
+	h.parent.rules[h.index]->body.push_back(predicate(i.parent.name,i.variables,i.negated));
 	return h;
 }
 
@@ -43,4 +43,8 @@ parse_h operator>>(parse_i lhs, parse_i rhs)
 	return parse_h(lhs,rhs);
 }
 
-parse_i operator!(
+parse_i operator!(parse_i i)
+{
+	i.negated = !i.negated;
+	return i;
+}

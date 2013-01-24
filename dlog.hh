@@ -102,8 +102,8 @@ variable symbolic(std::string n);
 
 struct predicate
 {
-	predicate(std::string n, std::initializer_list<variable> &lst);
-	predicate(std::string n, const std::vector<variable> &lst);
+	predicate(std::string n, std::initializer_list<variable> &lst, bool m);
+	predicate(std::string n, const std::vector<variable> &lst, bool m);
 
 	std::string name;
 	std::vector<variable> variables;

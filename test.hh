@@ -7,12 +7,14 @@ class DESTest : public CppUnit::TestFixture
 {
 	CPPUNIT_TEST_SUITE(DESTest);
 	CPPUNIT_TEST(testFamily);
+	CPPUNIT_TEST(testGame);
 	CPPUNIT_TEST_SUITE_END();
 
 public:
   void setUp(void) {}
   void tearDown(void) {}
   
+	// shamelessly ripped-off DES (des.sourceforge.net)
   void testFamily(void)
 	{
 		rel_ptr father_rel(new relation());
@@ -68,6 +70,47 @@ public:
 
 		CPPUNIT_ASSERT(res);
 		CPPUNIT_ASSERT_EQUAL(res->rows().size(),(unsigned long)16);
+		for(const relation::row &r: expected_rel->rows())
+			CPPUNIT_ASSERT(res->includes(r));
+	}
+
+	void testGame(void)
+	{
+		rel_ptr move_rel(new relation());
+		insert(move_rel,1,2);
+		insert(move_rel,2,3);
+		insert(move_rel,3,4);
+		insert(move_rel,1,3);
+		insert(move_rel,1,5);
+	
+		rel_ptr expected_rel(new relation());
+		insert(expected_rel,1);
+		insert(expected_rel,3);
+
+		parse move("move"), canMove("canMove"), possible_winning("possible_winning"), winning("winning"), odd_move("odd_move");
+
+		canMove("X") >> move("X","Y");
+		
+		possible_winning("X") >> odd_move("X","Y"),!canMove("Y");
+		
+		winning("X") >> move("X","Y"),!possible_winning("Y");
+
+		odd_move("X","Y") >> move("X","Y");
+		odd_move("X","Y") >> move("X","Z1"),move("Z1","Z2"),odd_move("Z2","Y");
+
+			std::map<std::string,rel_ptr> edb;
+		std::multimap<std::string,rule_ptr> idb;
+
+		std::for_each(canMove.rules.begin(),canMove.rules.end(),[&](rule_ptr r) { idb.insert(std::make_pair(r->head.name,r)); });
+		std::for_each(possible_winning.rules.begin(),possible_winning.rules.end(),[&](rule_ptr r) { idb.insert(std::make_pair(r->head.name,r)); });
+		std::for_each(winning.rules.begin(),winning.rules.end(),[&](rule_ptr r) { idb.insert(std::make_pair(r->head.name,r)); });
+		std::for_each(odd_move.rules.begin(),odd_move.rules.end(),[&](rule_ptr r) { idb.insert(std::make_pair(r->head.name,r)); });
+		edb.insert(std::make_pair("move",move_rel));
+
+		rel_ptr res = eval("winning",idb,edb);
+
+		CPPUNIT_ASSERT(res);
+		CPPUNIT_ASSERT_EQUAL(res->rows().size(),(unsigned long)2);
 		for(const relation::row &r: expected_rel->rows())
 			CPPUNIT_ASSERT(res->includes(r));
 	}
