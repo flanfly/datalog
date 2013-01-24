@@ -148,6 +148,17 @@ bool relation::insert(const relation::row &r)
 		return false;
 }
 
+bool relation::insert(rel_ptr r)
+{
+	assert(r);
+	bool ret = false;
+
+	for(const relation::row &s: r->rows())
+		ret |= insert(s);
+	
+	return ret;
+}
+
 void relation::reject(std::function<bool(const relation::row &)> f)
 {
 	auto i = m_rows.begin();
@@ -364,9 +375,11 @@ rel_ptr join(const std::vector<variable> &a_bind,const rel_ptr a_rel,const std::
 {
 	assert(a_rel && b_rel);
 	std::set<unsigned int> *a_idx = a_rel->find(a_bind);
-	assert(a_idx);
 	std::multimap<unsigned int,unsigned int> cross_vars; // a -> b
 	rel_ptr ret(new relation());
+
+	if(!a_idx)
+		return ret;
 
 	auto i = a_bind.begin();
 	while(i != a_bind.end())
@@ -483,11 +496,6 @@ rel_ptr eval_rule(const rule_ptr r, const std::vector<rel_ptr> &relations)
 		++j;
 	}
 
-	std::cout << "common: " << std::endl;
-	for(const std::pair<std::string,unsigned int> &p: common)
-		std::cout << p.first << " at col " << p.second << ", ";
-	std::cout << std::endl << "pre negation:" << std::endl << *temp << std::endl;
-
 	// negated predicates
 	auto i = r->body.begin();
 
@@ -517,23 +525,13 @@ rel_ptr eval_rule(const rule_ptr r, const std::vector<rel_ptr> &relations)
 					++j;
 				}
 				
-				if(rel->includes(b))
-				{
-					std::cout << "reject ";
-					for(const variant &v: b)
-						std::cout << v << " " << std::endl;
-					return true;
-				}
-				else
-					return false;
+				return rel->includes(b);
 			});
 		}
 
 		++i;
 	}
 	
-	std::cout << "post negation:" << std::endl << *temp << std::endl;
-
 	// project onto head predicate
 	rel_ptr ret(new relation());
 	for(const relation::row &rr: temp->rows())
@@ -638,8 +636,7 @@ rel_ptr eval(std::string query, std::multimap<std::string,rule_ptr> &idb, std::m
 				rel_ptr old = rels.count(n) ? rels[n] : 0;
 
 				if(old)
-					for(const relation::row &r: res->rows())
-						old->insert(r);
+					old->insert(res);
 				else
 					rels.insert(std::make_pair(n,res));
 				
@@ -666,7 +663,13 @@ rel_ptr eval(std::string query, std::multimap<std::string,rule_ptr> &idb, std::m
 
 			if(res)
 			{
-				deltas.insert(std::make_pair(n,res));
+				rel_ptr d = deltas.count(n) ? deltas[n] : 0;
+
+				if(d)
+					d->insert(res);
+				else
+					deltas.insert(std::make_pair(n,res));
+					
 				std::cout << *res << std::endl;
 			}
 		}
@@ -711,6 +714,8 @@ rel_ptr eval(std::string query, std::multimap<std::string,rule_ptr> &idb, std::m
 					}
 
 					res = eval_rule(r,plan);
+
+					// XXX: merge later in do {} while(modified);
 					delta = deltas.count(n) ? deltas[n] : 0;
 					cur = rels.count(n) ? rels[n] : 0;
 

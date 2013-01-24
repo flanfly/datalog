@@ -8,6 +8,7 @@ class DESTest : public CppUnit::TestFixture
 	CPPUNIT_TEST_SUITE(DESTest);
 	CPPUNIT_TEST(testFamily);
 	CPPUNIT_TEST(testGame);
+	CPPUNIT_TEST(testMrTc);
 	CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -114,4 +115,76 @@ public:
 		for(const relation::row &r: expected_rel->rows())
 			CPPUNIT_ASSERT(res->includes(r));
 	}
+
+	void testMrTc(void)
+	{
+		rel_ptr p_rel(new relation());
+		insert(p_rel,"a","b");
+		insert(p_rel,"c","d");
+		
+		rel_ptr q_rel(new relation());
+		insert(q_rel,"b","c");
+		insert(q_rel,"d","e");
+		
+		rel_ptr p1_rel(new relation());
+		insert(p1_rel,"a1","b1");
+		insert(p1_rel,"c1","d1");
+		
+		rel_ptr q1_rel(new relation());
+		insert(q1_rel,"b1","c1");
+		insert(q1_rel,"d1","e1");
+	
+		rel_ptr expected_rel(new relation());
+		insert(expected_rel,"a","b");
+		insert(expected_rel,"a","c");
+		insert(expected_rel,"a","d");
+		insert(expected_rel,"a","e");
+		insert(expected_rel,"a1","b1");
+		insert(expected_rel,"a1","c1");
+		insert(expected_rel,"a1","d1");
+		insert(expected_rel,"a1","e1");
+		insert(expected_rel,"b","c");
+		insert(expected_rel,"b","d");
+		insert(expected_rel,"b","e");
+		insert(expected_rel,"b1","c1");
+		insert(expected_rel,"b1","d1");
+		insert(expected_rel,"b1","e1");
+		insert(expected_rel,"c","d");
+		insert(expected_rel,"c","e");
+		insert(expected_rel,"c1","d1");
+		insert(expected_rel,"c1","e1");
+		insert(expected_rel,"d","e");
+		insert(expected_rel,"d1","e1");
+
+		parse p("p"), q("q"), pqs("pqs"), p1("p1"), q1("q1"), pqs1("pqs1");
+		
+		pqs("X","Y") >> p("X","Y");
+		pqs("X","Y") >> q("X","Y");
+		pqs("X","Y") >> pqs("X","Z"),p("Z","Y");
+		pqs("X","Y") >> pqs("X","Z"),q("Z","Y");
+		pqs("X","Y") >> pqs1("X","Y");
+
+		pqs1("X","Y") >> p1("X","Y");
+		pqs1("X","Y") >> q1("X","Y");
+		pqs1("X","Y") >> pqs1("X","Z"),p1("Z","Y");
+		pqs1("X","Y") >> pqs1("X","Z"),q1("Z","Y");
+
+		std::map<std::string,rel_ptr> edb;
+		std::multimap<std::string,rule_ptr> idb;
+
+		std::for_each(pqs.rules.begin(),pqs.rules.end(),[&](rule_ptr r) { idb.insert(std::make_pair(r->head.name,r)); });
+		std::for_each(pqs1.rules.begin(),pqs1.rules.end(),[&](rule_ptr r) { idb.insert(std::make_pair(r->head.name,r)); });
+		edb.insert(std::make_pair("p",p_rel));
+		edb.insert(std::make_pair("q",q_rel));
+		edb.insert(std::make_pair("p1",p1_rel));
+		edb.insert(std::make_pair("q1",q1_rel));
+
+		rel_ptr res = eval("pqs1",idb,edb);
+
+		CPPUNIT_ASSERT(res);
+		CPPUNIT_ASSERT_EQUAL(res->rows().size(),(unsigned long)20);
+		for(const relation::row &r: expected_rel->rows())
+			CPPUNIT_ASSERT(res->includes(r));
+	}
+
 };

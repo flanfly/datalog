@@ -70,6 +70,7 @@ public:
 	bool includes(const relation::row &r) const;
 
 	bool insert(const row &r);
+	bool insert(std::shared_ptr<relation> r);
 	void reject(std::function<bool(const row &)> f);
 
 private:
