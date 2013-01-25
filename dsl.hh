@@ -55,7 +55,7 @@ public:
 	unsigned int index;
 	
 	friend parse_h operator,(parse_h h, parse_i i);
-	friend parse_h operator>>(parse_i lhs, parse_i rhs);
+	friend parse_h operator<<(parse_i lhs, parse_i rhs);
 };
 
 void fill(std::list<variable> &p);
@@ -67,17 +67,9 @@ void fill(std::list<variable> &p, Head head)
 }
 
 template<>
-inline void fill(std::list<variable> &p, std::string head)
+inline void fill(std::list<variable> &p, variable head)
 {
-	assert(head.size());
-	p.push_back(isupper(head[0]) ? symbolic(head) : bound<std::string>(head));
-}
-
-template<>
-inline void fill(std::list<variable> &p, const char *head)
-{
-	assert(strlen(head));
-	p.push_back(isupper(head[0]) ? symbolic(head) : bound<std::string>(head));
+	p.push_back(head);
 }
 
 template<typename Head, typename... Tail>
@@ -88,23 +80,14 @@ void fill(std::list<variable> &p, Head head, Tail&&... tail)
 }
 	
 template<typename... Tail>
-void fill(std::list<variable> &p, std::string head, Tail&&... tail)
+void fill(std::list<variable> &p, variable head, Tail&&... tail)
 {
-	assert(head.size());
-	p.push_back(isupper(head[0]) ? symbolic(head) : bound<std::string>(head));
-	fill(p,tail...);
-}
-
-template<typename... Tail>
-void fill(std::list<variable> &p, const char *head, Tail&&... tail)
-{
-	assert(strlen(head));
-	p.push_back(isupper(head[0]) ? symbolic(head) : bound<std::string>(head));
+	p.push_back(head);
 	fill(p,tail...);
 }
 
 parse_i operator!(parse_i i);
 parse_h operator,(parse_h h, parse_i i);
-parse_h operator>>(parse_i lhs, parse_i rhs);
+parse_h operator<<(parse_i lhs, parse_i rhs);
 
 #endif

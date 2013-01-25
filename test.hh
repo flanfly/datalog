@@ -50,13 +50,13 @@ public:
 
 		parse parent("parent"),ancestor("ancestor"),father("father"),mother("mother"),answer("answer");
 
-		parent("X","Y") >> father("X","Y");
-		parent("X","Y") >> mother("X","Y");
+		parent("X"_dl,"Y"_dl) << father("X"_dl,"Y"_dl);
+		parent("X"_dl,"Y"_dl) << mother("X"_dl,"Y"_dl);
 
-		ancestor("X","Y") >> parent("X","Y");
-		ancestor("X","Z") >> parent("X","Y"),ancestor("Y","Z");
+		ancestor("X"_dl,"Y"_dl) << parent("X"_dl,"Y"_dl);
+		ancestor("X"_dl,"Z"_dl) << parent("X"_dl,"Y"_dl),ancestor("Y"_dl,"Z"_dl);
 
-		answer("X","Y") >> ancestor("X","Y");
+		answer("X"_dl,"Y"_dl) << ancestor("X"_dl,"Y"_dl);
 
 		std::map<std::string,rel_ptr> edb;
 		std::multimap<std::string,rule_ptr> idb;
@@ -90,14 +90,14 @@ public:
 
 		parse move("move"), canMove("canMove"), possible_winning("possible_winning"), winning("winning"), odd_move("odd_move");
 
-		canMove("X") >> move("X","Y");
+		canMove("X") << move("X","Y");
 		
-		possible_winning("X") >> odd_move("X","Y"),!canMove("Y");
+		possible_winning("X"_dl) << odd_move("X"_dl,"Y"_dl),!canMove("Y"_dl);
 		
-		winning("X") >> move("X","Y"),!possible_winning("Y");
+		winning("X"_dl) << move("X"_dl,"Y"_dl),!possible_winning("Y"_dl);
 
-		odd_move("X","Y") >> move("X","Y");
-		odd_move("X","Y") >> move("X","Z1"),move("Z1","Z2"),odd_move("Z2","Y");
+		odd_move("X"_dl,"Y"_dl) << move("X"_dl,"Y"_dl);
+		odd_move("X"_dl,"Y"_dl) << move("X"_dl,"Z1"_dl),move("Z1"_dl,"Z2"_dl),odd_move("Z2"_dl,"Y"_dl);
 
 			std::map<std::string,rel_ptr> edb;
 		std::multimap<std::string,rule_ptr> idb;
@@ -149,7 +149,7 @@ public:
 		insert(expected_rel,"b1","c1");
 		insert(expected_rel,"b1","d1");
 		insert(expected_rel,"b1","e1");
-		insert(expected_rel,"c","d");
+		insert(expected_rel,"<c","d");
 		insert(expected_rel,"c","e");
 		insert(expected_rel,"c1","d1");
 		insert(expected_rel,"c1","e1");
@@ -158,16 +158,16 @@ public:
 
 		parse p("p"), q("q"), pqs("pqs"), p1("p1"), q1("q1"), pqs1("pqs1");
 		
-		pqs("X","Y") >> p("X","Y");
-		pqs("X","Y") >> q("X","Y");
-		pqs("X","Y") >> pqs("X","Z"),p("Z","Y");
-		pqs("X","Y") >> pqs("X","Z"),q("Z","Y");
-		pqs("X","Y") >> pqs1("X","Y");
+		pqs("X"_dl,"Y"_dl) << p("X"_dl,"Y"_dl);
+		pqs("X"_dl,"Y"_dl) << q("X"_dl,"Y"_dl);
+		pqs("X"_dl,"Y"_dl) << pqs("X"_dl,"Z"_dl),p("Z"_dl,"Y"_dl);
+		pqs("X"_dl,"Y"_dl) << pqs("X"_dl,"Z"_dl),q("Z"_dl,"Y"_dl);
+		pqs("X"_dl,"Y"_dl) << pqs1("X"_dl,"Y"_dl);
 
-		pqs1("X","Y") >> p1("X","Y");
-		pqs1("X","Y") >> q1("X","Y");
-		pqs1("X","Y") >> pqs1("X","Z"),p1("Z","Y");
-		pqs1("X","Y") >> pqs1("X","Z"),q1("Z","Y");
+		pqs1("X"_dl,"Y"_dl) << p1("X"_dl,"Y"_dl);
+		pqs1("X"_dl,"Y"_dl) << q1("X"_dl,"Y"_dl);
+		pqs1("X"_dl,"Y"_dl) << pqs1("X"_dl,"Z"_dl),p1("Z"_dl,"Y"_dl);
+		pqs1("X"_dl,"Y"_dl) << pqs1("X"_dl,"Z"_dl),q1("Z"_dl,"Y"_dl);
 
 		std::map<std::string,rel_ptr> edb;
 		std::multimap<std::string,rule_ptr> idb;

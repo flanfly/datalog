@@ -92,6 +92,10 @@ struct variable
 
 bool operator==(const variable &a, const variable &b);
 std::ostream &operator<<(std::ostream &os, const variable &v);
+inline variable operator"" _dl(const char *s, size_t sz)
+{
+	return variable(false,"",std::string(s));
+}
 
 template<typename T>
 variable bound(T t)
@@ -114,6 +118,24 @@ struct predicate
 bool operator==(const predicate &a, const predicate &b);
 std::ostream &operator<<(std::ostream &os, const predicate &p);
 
+struct constraint
+{
+	enum Type
+	{
+		LESS = 0,
+		LESS_OR_EQUAL = 1,
+		GREATER = 2,
+		GREATER_OR_EQUAL = 3
+	};
+
+	// XXX
+	constraint(Type t, variable a, variable b);
+	inline bool operator()(variant x, variant y) const;
+
+	Type type;
+	variable 
+
+
 struct rule
 {
 	rule(predicate h);
@@ -122,6 +144,7 @@ struct rule
 	
 	predicate head;
 	std::list<predicate> body;
+	std::list<constraint> constraints;
 };
 typedef std::shared_ptr<rule> rule_ptr;
 
