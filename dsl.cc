@@ -14,13 +14,13 @@ parse_h::parse_h(parse_i &head, parse_i &tail)
 }
 
 parse_i::parse_i(parse &p, std::vector<variable> &v)
-: parent(p), variables(v)
+: parent(p), variables(v), negated(false)
 {
 	return;
 }
 
 parse_i::parse_i(parse &p, std::list<variable> &v)
-: parent(p)
+: parent(p), negated(false)
 { 
 	copy(v.begin(),v.end(),std::inserter(variables,variables.begin())); 
 }

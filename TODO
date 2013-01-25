@@ -7,9 +7,9 @@
 
 ==> Semi-naive evaluation (Milestone) **DONE**
 
-==> Negation
+==> Negation **DONE**
 
-==> Sanity checks in 'eval' and useful exceptions
+==> Sanity checks in 'eval' and useful exceptions **DONE**
 	--> See 'Database Systems' for invariants
 
 ==> Linear constraints (>,<,<=,>=)

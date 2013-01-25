@@ -186,5 +186,4 @@ public:
 		for(const relation::row &r: expected_rel->rows())
 			CPPUNIT_ASSERT(res->includes(r));
 	}
-
 };

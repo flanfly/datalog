@@ -571,6 +571,29 @@ bool mutual_rec(const std::multimap<std::string,rule_ptr> &idb, std::string a, s
 	return a == b || (derives(idb,a,b) && derives(idb,b,a));
 }
 
+bool is_safe(rule_ptr r)
+{
+	// every variable in the head must apper in a non-negated predicate in the body
+	return r && std::all_of(r->head.variables.begin(),r->head.variables.end(),[&](const variable &v)
+	{
+		return v.bound || std::any_of(r->body.begin(),r->body.end(),[&](const predicate &p)
+		{
+			return !p.negated && std::find(p.variables.begin(),p.variables.end(),v) != p.variables.end();
+		});
+	}) && 
+	// every variable occuring in a negated prediacte in the body must occur in a non-negated one too
+	std::all_of(r->body.begin(),r->body.end(),[&](const predicate &p)
+	{
+		return !p.negated || std::all_of(p.variables.begin(),p.variables.end(),[&](const variable &v)
+		{
+			return v.bound || std::any_of(r->body.begin(),r->body.end(),[&](const predicate &q)
+			{
+				return !q.negated && std::find(q.variables.begin(),q.variables.end(),v) != q.variables.end();
+			});
+		});
+	});
+}
+
 rel_ptr eval(std::string query, std::multimap<std::string,rule_ptr> &idb, std::map<std::string,rel_ptr> &edb)
 {
 	// TODO only include rules that 'query' depends upon
@@ -578,9 +601,16 @@ rel_ptr eval(std::string query, std::multimap<std::string,rule_ptr> &idb, std::m
 	std::list<std::string> partition; // result of partitioning the idb predicates with mutual_rec()
 
 	for(const std::pair<std::string,rule_ptr> &p: idb)
+	{
+		if(!is_safe(p.second))
+		{
+			std::cout << *p.second << " is not safe!" << std::endl;
+			return rel_ptr(0);
+		}
 		if(std::find(partition.begin(),partition.end(),p.first) == partition.end())
 			partition.push_back(p.first);
-	
+	}
+
 	partition.sort([&](const std::string &a, const std::string &b) -> bool
 	{
 		if(a == b)
