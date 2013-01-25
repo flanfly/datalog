@@ -179,7 +179,7 @@ public:
 		edb.insert(std::make_pair("p1",p1_rel));
 		edb.insert(std::make_pair("q1",q1_rel));
 
-		rel_ptr res = eval("pqs1",idb,edb);
+		rel_ptr res = eval("pqs",idb,edb);
 
 		CPPUNIT_ASSERT(res);
 		CPPUNIT_ASSERT_EQUAL(res->rows().size(),(unsigned long)20);

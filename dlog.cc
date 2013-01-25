@@ -678,20 +678,20 @@ rel_ptr eval(std::string query, std::multimap<std::string,rule_ptr> &idb, std::m
 		do
 		{
 			modified = false;
+			std::list<std::pair<std::string,rel_ptr>> new_deltas;
 
 			for(const rule_ptr r: recursive)
 			{
 				assert(r);
 				std::cout << *r << std::endl;
 
-				const std::string &n = r->head.name;
 				std::vector<rel_ptr> plan(r->body.size(),rel_ptr(0));
 				unsigned int sub = std::pow(2,r->body.size()) - 2;	// 1: current, 0: delta
+				rel_ptr res;
 
 				do
 				{
 					unsigned int pi = 0;
-					rel_ptr res, delta, cur;
 
 					while(pi < r->body.size())
 					{
@@ -712,37 +712,42 @@ rel_ptr eval(std::string query, std::multimap<std::string,rule_ptr> &idb, std::m
 
 						++pi;
 					}
-
+					
 					res = eval_rule(r,plan);
-
-					// XXX: merge later in do {} while(modified);
-					delta = deltas.count(n) ? deltas[n] : 0;
-					cur = rels.count(n) ? rels[n] : 0;
-
-					// merge old delta
-					if(delta)
-					{
-						if(cur)
-							for(const relation::row &r: delta->rows())
-								cur->insert(r);
-						else
-							rels.insert(std::make_pair(n,delta));
-					}
-
-					cur = rels[n];
-					deltas.erase(n);
-					deltas.insert(std::make_pair(n,res));
-
-					if(res)
-						for(const relation::row &r: res->rows())
-							modified |= !cur->includes(r);
-
+					new_deltas.push_back(std::make_pair(r->head.name,res));
 					std::cout << *res << std::endl;
-					out:
-						;
+
+					out: ;
 				}
 				while(sub--);
 			}
+
+			// merge old deltas with 'rel'
+			for(const std::pair<std::string,rel_ptr> &p: deltas)
+			{
+				if(rels.count(p.first))
+					rels[p.first]->insert(p.second);
+			}
+			deltas.clear();
+
+			// set new deltas, set 'modified'
+			for(const std::pair<std::string,rel_ptr> &p: new_deltas)
+			{
+				if(rels.count(p.first))
+				{
+					rel_ptr cur = rels[p.first];
+					for(const relation::row &r: p.second->rows())
+						modified |= !cur->includes(r);
+				}
+
+				modified |= p.second->rows().size() > 0;
+				
+				if(deltas.count(p.first))
+					deltas[p.first]->insert(p.second);
+				else
+					deltas.insert(p);
+			}
+			new_deltas.clear();
 		}
 		while(modified);
 		
