@@ -3,6 +3,38 @@
 
 #include "dlog.hh"
 #include "dsl.hh"
+/*
+bool operator<(const variant &a, const variant &b)
+{
+	if(a.type() == b.type())
+	{
+		if(a.type() == typeid(bool))
+			return boost::get<bool>(a) < boost::get<bool>(b);
+		else if(a.type() == typeid(unsigned int))
+			return boost::get<unsigned int>(a) < boost::get<unsigned int>(b);
+		else if(a.type() == typeid(std::string))
+			return boost::get<std::string>(a) < boost::get<std::string>(b);
+		else
+			assert(false);
+	}
+	else
+		return std::type_index(a.type()) < std::type_index(b.type());
+}*/
+
+bool operator<=(const variant &a, const variant &b)
+{
+	return a == b || a < b;
+}
+
+bool operator>(const variant &a, const variant &b)
+{
+	return !(a <= b);
+}
+
+bool operator>=(const variant &a, const variant &b)
+{
+	return a == b || a > b;
+}
 
 const std::vector<relation::row> &relation::rows(void) const
 {
@@ -258,6 +290,44 @@ std::ostream &operator<<(std::ostream &os, const predicate &p)
 	return os;
 }
 
+
+constraint::constraint(Type t, variable a, variable b)
+: type(t), operand1(a), operand2(b)
+{
+	return;
+}
+
+bool constraint::operator()(const std::unordered_map<std::string,unsigned int> &binding, const relation::row &r) const 
+{
+	variant a = !operand1.bound ? r.at(binding.at(operand1.name)) : operand1.instantiation,
+					b = !operand2.bound ? r.at(binding.at(operand2.name)) : operand2.instantiation;
+	
+	switch(type)
+	{
+		case Less: return a < b;
+		case LessOrEqual: return a <= b;
+		case Greater: return a > b;
+		case GreaterOrEqual: return a >= b;
+		default: assert(false);
+	}
+}
+
+std::ostream &operator<<(std::ostream &os, const constraint &c)
+{
+	os << c.operand1;
+	switch(c.type)
+	{
+		case constraint::Less: os << " > "; break;
+		case constraint::LessOrEqual: os << " >= "; break;
+		case constraint::Greater: os << " < "; break;
+		case constraint::GreaterOrEqual: os << " <= "; break;
+		default: assert(false);
+	}
+	os << c.operand2;
+
+	return os;
+}
+
 rule::rule(predicate h)
 : head(h)
 {
@@ -280,7 +350,7 @@ std::ostream &operator<<(std::ostream &os, const rule &r)
 {
 	os << r.head;
 	
-	if(r.body.size())
+	if(r.body.size() || r.constraints.size())
 	{
 		os << " :- ";
 		for(const predicate &p: r.body)
@@ -288,6 +358,9 @@ std::ostream &operator<<(std::ostream &os, const rule &r)
 				os << p;
 			else
 				os << p << ",";
+				
+		for(const constraint &c: r.constraints)
+			os << "," <<  c;
 	}
 
 	return os;
@@ -361,6 +434,7 @@ std::ostream &operator<<(std::ostream &os, const relation &a)
 	return os;
 }
 
+/*
 variable find_helper(const ub &)
 {
 	return variable(false,"","X");
@@ -369,7 +443,7 @@ variable find_helper(const ub &)
 variable find_helper(variant v)
 {
 	return variable(true,v,"");
-}
+}*/
 
 rel_ptr join(const std::vector<variable> &a_bind,const rel_ptr a_rel,const std::vector<variable> &b_bind,const rel_ptr b_rel)
 {

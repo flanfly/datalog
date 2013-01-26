@@ -9,6 +9,7 @@ class DESTest : public CppUnit::TestFixture
 	CPPUNIT_TEST(testFamily);
 	CPPUNIT_TEST(testGame);
 	CPPUNIT_TEST(testMrTc);
+	CPPUNIT_TEST(testConstraints);
 	CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -70,7 +71,7 @@ public:
 		rel_ptr res = eval("answer",idb,edb);
 
 		CPPUNIT_ASSERT(res);
-		CPPUNIT_ASSERT_EQUAL(res->rows().size(),(unsigned long)16);
+		CPPUNIT_ASSERT(res->rows().size() == 16);
 		for(const relation::row &r: expected_rel->rows())
 			CPPUNIT_ASSERT(res->includes(r));
 	}
@@ -111,7 +112,7 @@ public:
 		rel_ptr res = eval("winning",idb,edb);
 
 		CPPUNIT_ASSERT(res);
-		CPPUNIT_ASSERT_EQUAL(res->rows().size(),(unsigned long)2);
+		CPPUNIT_ASSERT(res->rows().size() == 2);
 		for(const relation::row &r: expected_rel->rows())
 			CPPUNIT_ASSERT(res->includes(r));
 	}
@@ -149,7 +150,7 @@ public:
 		insert(expected_rel,"b1","c1");
 		insert(expected_rel,"b1","d1");
 		insert(expected_rel,"b1","e1");
-		insert(expected_rel,"<c","d");
+		insert(expected_rel,"c","d");
 		insert(expected_rel,"c","e");
 		insert(expected_rel,"c1","d1");
 		insert(expected_rel,"c1","e1");
@@ -182,8 +183,24 @@ public:
 		rel_ptr res = eval("pqs",idb,edb);
 
 		CPPUNIT_ASSERT(res);
-		CPPUNIT_ASSERT_EQUAL(res->rows().size(),(unsigned long)20);
+		CPPUNIT_ASSERT(res->rows().size() == 20);
 		for(const relation::row &r: expected_rel->rows())
 			CPPUNIT_ASSERT(res->includes(r));
+	}
+
+	void testConstraints(void)
+	{
+		parse a("a"), b("b");
+		variable X = "X"_dl, Y = "Y"_dl;
+
+		a(X) << b(X),X > 2,X <= 10;
+		b(X) << b(X), X <= Y;
+
+		for(const rule_ptr r: a.rules)
+			std::cout << *r << std::endl;
+			
+		for(const rule_ptr r: b.rules)
+			std::cout << *r << std::endl;
+
 	}
 };

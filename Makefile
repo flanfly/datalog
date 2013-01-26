@@ -1,5 +1,5 @@
 CXX = clang++
-CXXARGS = -Wall -Werror -std=c++0x -g
+CXXARGS = -Wall -Werror -pedantic -std=c++0x -g
 
 all: test
 

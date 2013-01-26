@@ -21,11 +21,7 @@
 struct variable;
 class relation;
 struct predicate;
-struct rg_node;
 struct rule;
-
-struct ub {};
-//static ub ubound;
 
 typedef boost::variant<unsigned int,std::string> variant;
 
@@ -59,6 +55,11 @@ namespace std
     }
 	};	
 }
+
+//bool operator<(const variant &a, const variant &b);
+bool operator<=(const variant &a, const variant &b);
+bool operator>(const variant &a, const variant &b);
+bool operator>=(const variant &a, const variant &b);
 
 class relation
 {
@@ -122,25 +123,23 @@ struct constraint
 {
 	enum Type
 	{
-		LESS = 0,
-		LESS_OR_EQUAL = 1,
-		GREATER = 2,
-		GREATER_OR_EQUAL = 3
+		Less, LessOrEqual, Greater, GreaterOrEqual,
 	};
 
-	// XXX
 	constraint(Type t, variable a, variable b);
-	inline bool operator()(variant x, variant y) const;
+	bool operator()(const std::unordered_map<std::string,unsigned int> &binding, const relation::row &r) const;
 
 	Type type;
-	variable 
+	variable operand1, operand2;
+};
 
+std::ostream &operator<<(std::ostream &os, const constraint &c);
 
 struct rule
 {
 	rule(predicate h);
 	rule(predicate h, std::initializer_list<predicate> &lst);
-	rule(predicate h, const std::list<predicate> &lst);
+	rule(predicate h, const std::list<predicate> &plst);
 	
 	predicate head;
 	std::list<predicate> body;
@@ -159,6 +158,7 @@ void insert(rel_ptr rel, Args&&... args)
 	rel->insert(nr);
 }
 
+/*
 variable find_helper(const ub &);
 variable find_helper(variant v);
 
@@ -180,7 +180,7 @@ rel_ptr find(rel_ptr rel, Args&&... args)
 	}
 
 	return ret;
-}
+}*/
 
 std::ostream &operator<<(std::ostream &os, const relation &a);
 rel_ptr eval(std::string query, std::multimap<std::string,rule_ptr> &in, std::map<std::string,rel_ptr> &extensional);

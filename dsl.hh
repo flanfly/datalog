@@ -13,18 +13,13 @@ class parse_h;
 
 class parse_i
 {
-private:
-	parse_i(parse &p, std::vector<variable> &v);
-	parse_i(parse &p, std::list<variable> &v);
-
 public:
+	parse_i(parse &p, std::vector<variable> &v);
+
 	parse &parent;
 	std::vector<variable> variables;
 	std::list<parse_i> tail;
 	bool negated;
-
-	friend struct parse;
-	friend parse_i operator,(parse_i lhs, parse_i rhs);
 };
 
 struct parse
@@ -34,7 +29,7 @@ struct parse
 	template<typename... Tail>
 	parse_i operator()(Tail&&... tail)
 	{
-		std::list<variable> vars;
+		std::vector<variable> vars;
 
 		fill(vars,tail...);
 		return parse_i(*this,vars);
@@ -46,48 +41,66 @@ struct parse
 
 class parse_h
 {
-private:
+public:
 	parse_h(parse_i &p,parse_i &o);
 
-public:
 	parse &parent;
 	std::vector<variable> variables;
-	unsigned int index;
-	
-	friend parse_h operator,(parse_h h, parse_i i);
-	friend parse_h operator<<(parse_i lhs, parse_i rhs);
+	rule_ptr cur_rule;
 };
 
-void fill(std::list<variable> &p);
+class parse_c
+{
+public:
+	parse_c(constraint c);
+
+	std::list<constraint> constraints;
+};
+
+void fill(std::vector<variable> &p);
 
 template<typename Head>
-void fill(std::list<variable> &p, Head head)
+void fill(std::vector<variable> &p, Head head)
 {
 	p.push_back(bound<Head>(head));
 }
 
 template<>
-inline void fill(std::list<variable> &p, variable head)
+inline void fill(std::vector<variable> &p, variable head)
 {
 	p.push_back(head);
 }
 
 template<typename Head, typename... Tail>
-void fill(std::list<variable> &p, Head head, Tail&&... tail)
+void fill(std::vector<variable> &p, Head head, Tail&&... tail)
 {
 	p.push_back(bound<Head>(head));
 	fill(p,tail...);
 }
 	
 template<typename... Tail>
-void fill(std::list<variable> &p, variable head, Tail&&... tail)
+void fill(std::vector<variable> &p, variable head, Tail&&... tail)
 {
 	p.push_back(head);
 	fill(p,tail...);
 }
 
+parse_c operator<(variant a, variable b);
+parse_c operator<(variable a, variable b);
+parse_c operator<(variable a, variant b);
+parse_c operator<=(variant a, variable b);
+parse_c operator<=(variable a, variable b);
+parse_c operator<=(variable a, variant b);
+parse_c operator>(variant a, variable b);
+parse_c operator>(variable a, variable b);
+parse_c operator>(variable a, variant b);
+parse_c operator>=(variant a, variable b);
+parse_c operator>=(variable a, variable b);
+parse_c operator>=(variable a, variant b);
+
 parse_i operator!(parse_i i);
 parse_h operator,(parse_h h, parse_i i);
+parse_h operator,(parse_h h, parse_c c);
 parse_h operator<<(parse_i lhs, parse_i rhs);
 
 #endif
